@@ -208,3 +208,21 @@ def test_recovered_source_is_backfill_not_change():
     second = apply_refresh(copy.deepcopy(first), build_envelope(profile(), run=RUN2))
     assert second["changes"] == []
     assert second["refresh"]["backfilled_claims"] > 0
+
+
+def test_identity_markers_find_orgnr_phone_address_in_footer():
+    from norway_company_agent.website import identity_markers
+
+    html = "<footer>Aas Elektronikk AS · Org.nr: 888 567&nbsp;232 MVA · Natvigveien 17, 4823 Nedenes · Tlf 900 49 299</footer>"
+    identity = {"organisation_number": "888567232", "phones": ["90049299"], "postal_code": "4823", "street": "Natvigveien"}
+    assert identity_markers(html, identity) == ["organisation_number", "phone", "address"]
+    assert identity_markers("<p>Org.nr 888 567 231</p>", identity) == []
+
+
+def test_domain_candidates():
+    from norway_company_agent.pipeline import domain_candidates
+
+    assert domain_candidates("SANDNES ELEKTRISKE AS") == ["sandneselektriske.no", "sandnes-elektriske.no"]
+    assert domain_candidates("BØ AS") == []
+    assert domain_candidates("AASEN & FARSTAD AS") == ["aasenfarstad.no", "aasen-farstad.no"]
+    assert domain_candidates("A B C D E AS") == []

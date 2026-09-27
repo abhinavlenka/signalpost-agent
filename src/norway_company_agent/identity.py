@@ -86,6 +86,10 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
     elif org_digits and org_digits in compact_homepage_candidate:
         score = 1.0
         reasons.append("exact organisation number appears in homepage identity evidence")
+    elif any("organisation_number" in markers for markers in (value.get("identity_markers") or {}).values()):
+        pages = [url for url, markers in (value.get("identity_markers") or {}).items() if "organisation_number" in markers]
+        score = 1.0
+        reasons.append(f"exact organisation number appears on the site ({pages[0]})")
     elif len(core) >= 2 and exact_homepage_name:
         score = 0.95
         reasons.append("all normalized legal-name tokens appear together in homepage identity evidence")

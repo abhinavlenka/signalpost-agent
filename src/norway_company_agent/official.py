@@ -206,6 +206,8 @@ def normalize_entity(body: Any) -> dict[str, Any]:
         "share_capital": body.get("kapital"),
         "parent_unit": body.get("overordnetEnhet"),
         "deleted_date": body.get("slettedato"),
+        # verification-only (never published): used to confirm website identity
+        "_phones": [phone for phone in (body.get("telefon"), body.get("mobil")) if phone],
     }
 
 

@@ -320,7 +320,30 @@ def dated_items(html: str, page_url: str, soup: BeautifulSoup) -> list[dict[str,
     return sorted(unique.values(), key=lambda item: item["date"], reverse=True)[:12]
 
 
-def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max_bytes: int) -> tuple[dict[str, Any] | None, list[dict[str, str]], int, int, int, str | None]:
+def identity_markers(html: str, identity: dict[str, Any] | None) -> list[str]:
+    """Exact registry markers present in raw HTML (footers included): orgnr, phone, address."""
+    if not identity:
+        return []
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"&nbsp;|&#160;|\u00a0", " ", text)
+    digits_only = re.sub(r"(?<=\d)[\s.\-](?=\d)", "", text)
+    found = []
+    org = str(identity.get("organisation_number") or "")
+    if len(org) == 9 and org in digits_only:
+        found.append("organisation_number")
+    for phone in identity.get("phones") or []:
+        phone = re.sub(r"\D", "", str(phone))[-8:]
+        if len(phone) == 8 and phone in digits_only:
+            found.append("phone")
+            break
+    postal, street = str(identity.get("postal_code") or ""), str(identity.get("street") or "").casefold()
+    lowered = text.casefold()
+    if postal and street and re.search(rf"\b{re.escape(postal)}\b", text) and street in lowered:
+        found.append("address")
+    return found
+
+
+def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max_bytes: int, identity: dict[str, Any] | None = None) -> tuple[dict[str, Any] | None, list[dict[str, str]], int, int, int, str | None]:
     if not _robots_allowed(url, timeout):
         return None, [], 1, 0, 0, "robots.txt disallows page"
     started = time.monotonic()
@@ -338,6 +361,7 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
         page_soup = BeautifulSoup(page_html, "lxml")
         page_text = trafilatura.extract(page_html, url=final_url, include_links=False, include_tables=False, favor_precision=True) or ""
         page = {
+            "identity_markers": identity_markers(page_html, identity),
             "category": page_category(url),
             "dated_items": dated_items(page_html, final_url, page_soup),
             "url": final_url,
@@ -373,7 +397,14 @@ def _extraction_state(text: str, soup: BeautifulSoup) -> str:
     return "js_fallback_candidate" if len(text.strip()) < 100 and len(soup.select("script[src]")) >= 2 else "static_complete"
 
 
-def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_000_000) -> tuple[dict[str, Any], dict[str, Any]]:
+def fetch_website(
+    url: str | None,
+    *,
+    timeout: float = 15.0,
+    max_bytes: int = 2_000_000,
+    identity: dict[str, Any] | None = None,
+    max_pages: int = 5,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     supplied_url = str(url or "").strip()
     supplied_scheme = bool(re.match(r"^https?://", supplied_url, re.I))
     normalized = normalize_homepage(url)
@@ -425,12 +456,14 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
         bytes_received = len(raw)
         page_latencies = [elapsed]
         homepage_domain = value["registered_domain"]
-        for page_url in _priority_links(final_url, soup):
+        value["identity_markers"] = {final_url: identity_markers(html, identity)} if identity else {}
+        for page_url in _priority_links(final_url, soup, limit=max_pages):
             page, page_social, page_requests, page_bytes, page_elapsed, page_error = _fetch_secondary_page(
                 page_url,
                 homepage_domain=homepage_domain,
                 timeout=timeout,
                 max_bytes=min(max_bytes, 1_000_000),
+                identity=identity,
             )
             requests += page_requests
             bytes_received += page_bytes
@@ -438,6 +471,8 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
                 page_latencies.append(page_elapsed)
             if page:
                 pages.append(page)
+                if page.get("identity_markers"):
+                    value["identity_markers"][page["url"]] = page["identity_markers"]
                 social.extend(page_social)
             elif page_error:
                 crawl_errors.append({"url": page_url, "error": page_error})
@@ -457,7 +492,7 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
     except urllib.error.URLError as exc:
         if not supplied_scheme and normalized.startswith("https://"):
             first_elapsed = int((time.monotonic() - started) * 1000)
-            record, metrics = fetch_website("http://" + supplied_url, timeout=timeout, max_bytes=max_bytes)
+            record, metrics = fetch_website("http://" + supplied_url, timeout=timeout, max_bytes=max_bytes, identity=identity, max_pages=max_pages)
             metrics["requests"] += 2
             metrics["latencies_ms"].insert(0, first_elapsed)
             return record, metrics

@@ -4,6 +4,8 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import re
+import socket
 import threading
 import time
 import traceback
@@ -16,7 +18,7 @@ from .claim_refresh import apply_refresh
 from .envelope import build_envelope
 from .evidence import evidence, utc_now
 from .identity import apply_website_identity_gate
-from .jobs_nav import NavJobIndex, match_company_jobs
+from .jobs_nav import NavJobIndex, match_company_jobs, raw_tokens
 from .official import fetch_official_modules
 from .summary import build_summary
 from .website import fetch_website
@@ -144,8 +146,21 @@ def research_official(profile: dict[str, Any]) -> None:
     profile["evidence"].update(records)
 
 
-def research_website(profile: dict[str, Any], url: str | None, *, discovery: str, declared_by: dict[str, Any] | None = None) -> bool:
-    record, _ = fetch_website(url)
+def registry_identity(profile: dict[str, Any]) -> dict[str, Any]:
+    live = ((profile["evidence"].get("registry_live") or {}).get("value")) or {}
+    address = live.get("business_address") or {}
+    first_line = (address.get("adresse") or [""])[0] if isinstance(address, dict) else ""
+    street = re.split(r"\s+\d", str(first_line or ""), maxsplit=1)[0].strip()
+    return {
+        "organisation_number": profile["organisation_number"],
+        "phones": live.get("_phones") or [],
+        "postal_code": address.get("postnummer") if isinstance(address, dict) else None,
+        "street": street if len(street) >= 4 else None,
+    }
+
+
+def research_website(profile: dict[str, Any], url: str | None, *, discovery: str, declared_by: dict[str, Any] | None = None, max_pages: int = 5) -> bool:
+    record, _ = fetch_website(url, identity=registry_identity(profile), max_pages=max_pages)
     if isinstance(record.get("value"), dict):
         record["value"]["registry_listed"] = discovery == "registry_listed"
     if declared_by and record.get("status") == "available":
@@ -174,6 +189,71 @@ def research_website(profile: dict[str, Any], url: str | None, *, discovery: str
     return publishable
 
 
+SKIP_GUESS_FORMS = {"BRL", "ESEK", "BBL", "SAM", "KIRK", "PRE", "VPFO", "ANNA"}
+
+
+def domain_candidates(name: str | None) -> list[str]:
+    tokens = [token for token in raw_tokens(name) if token not in {"og", "and", "the"}]
+    if not tokens or len(tokens) > 4:
+        return []
+    joined = "".join(tokens)
+    if len(tokens) == 1 and len(joined) < 5 or len(joined) > 40:
+        return []
+    candidates = [f"{joined}.no"]
+    if len(tokens) > 1:
+        candidates.append(f"{'-'.join(tokens)}.no")
+    return candidates
+
+
+def _resolves(host: str) -> bool:
+    try:
+        return bool(socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM))
+    except (socket.gaierror, UnicodeError, OSError):
+        return False
+
+
+def discover_by_domain_guess(profile: dict[str, Any]) -> dict[str, Any] | None:
+    """Name-derived .no domains, published only with orgnr on site or exact name + registered address/phone."""
+    live = ((profile["evidence"].get("registry_live") or {}).get("value")) or {}
+    if str(profile.get("legal_form") or "").upper() in SKIP_GUESS_FORMS or live.get("bankrupt") or live.get("liquidating"):
+        return {"skipped": "legal form or status unlikely to have an own website"}
+    records = (((profile["evidence"].get("financials") or {}).get("value")) or {}).get("records") or []
+    revenue = max([record.get("revenue") or 0 for record in records] or [0])
+    if not (live.get("employees") or 0) >= 1 and revenue < 1_000_000:
+        return {"skipped": "no registered employees and revenue below NOK 1m"}
+    tried = []
+    for domain in domain_candidates(profile.get("name")):
+        if len(tried) >= 2:
+            break
+        if not _resolves(domain):
+            tried.append({"domain": domain, "result": "no DNS"})
+            continue
+        record, _ = fetch_website("https://" + domain, identity=registry_identity(profile), max_pages=3)
+        if record.get("status") != "available":
+            tried.append({"domain": domain, "result": record.get("note") or record.get("status")})
+            continue
+        record["source_type"] = record["source_class"] = "name_derived_domain"
+        gated = apply_website_identity_gate(profile, record)["website"]
+        value = gated.get("value") or {}
+        assessment = value.get("identity_assessment") or {}
+        markers = {marker for items in (value.get("identity_markers") or {}).values() for marker in items}
+        name_exact = assessment.get("score", 0) >= 0.95 and "legal-name" in " ".join(assessment.get("reasons") or [])
+        if "organisation_number" in markers or (name_exact and markers & {"address", "phone"}):
+            assessment.update({
+                "status": "exact", "publishable": True, "method": "name_derived_domain_strict_v1",
+                "score": 1.0 if "organisation_number" in markers else 0.95,
+                "reasons": [*assessment.get("reasons", []), f"name-derived domain verified by registry markers: {sorted(markers)}"],
+            })
+            value["social_links"] = [{"platform": item["platform"], "url": item["url"]} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
+            value["discovery_method"] = "name_derived_domain"
+            value["registry_listed"] = False
+            profile["evidence"]["website"] = gated
+            tried.append({"domain": domain, "result": "verified"})
+            return {"tried": tried}
+        tried.append({"domain": domain, "result": "identity not verified", "markers": sorted(markers)})
+    return {"tried": tried}
+
+
 def research_company(profile: dict[str, Any]) -> dict[str, Any]:
     started = time.monotonic()
     try:
@@ -186,6 +266,9 @@ def research_company(profile: dict[str, Any]) -> dict[str, Any]:
                 f"https://data.brreg.no/enhetsregisteret/api/enheter/{profile['organisation_number']}",
                 note="registry lists no website",
             )
+        website = profile["evidence"].get("website") or {}
+        if not ((website.get("value") or {}).get("identity_assessment") or {}).get("publishable"):
+            profile["domain_guess"] = discover_by_domain_guess(profile)
     except BudgetExhausted as exc:
         profile["errors"].append({"source": "pipeline", "error": f"budget_exhausted: {exc}"})
     except Exception as exc:
