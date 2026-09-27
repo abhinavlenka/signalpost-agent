@@ -95,7 +95,10 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
         if before is None:
             claim["first_seen"] = now
             claim["last_seen"] = now
-            if previous_availability.get(claim["family"]) in {None, "failed", "blocked"}:
+            website_derived = claim["family"] in DEBOUNCED_FAMILIES or claim["field"] in DEBOUNCED_FIELDS
+            if previous_availability.get(claim["family"]) in {None, "failed", "blocked"} or website_derived:
+                # Either the source was not checked last run, or this is a website-derived fact that
+                # discovery may simply have missed before: a first observation, not a change in the world.
                 # The source was not successfully checked last run: this is a first observation, not a
                 # change in the world. Reporting it as new would be a false change.
                 claim["backfilled"] = True

@@ -13,6 +13,8 @@ Each run diffs every freshly built envelope against the previous envelope for th
 | Key disappeared but the source failed or was blocked this run | **no change**; the previous claim is carried forward as `stale: true` with its original evidence. A failed refresh never erases the last supported value. |
 | Dated history item aged out of the source window | kept as `historical: true`; not a removal |
 | Claim appears in a family whose source failed or was blocked last run | `backfilled: true`, **not** reported as a change. The world didn't change; the source recovered. |
+| Website-derived fact (website, profiles, brand, careers page, website news) appears | `backfilled: true` first observation, **not** a change. Discovery may simply have missed it last run. |
+| Website-derived fact missing once | carried forward as `stale: true`. A removal is reported only after a **second** consecutive miss. The last run's verified website is re-checked at its URL first. |
 
 ## Idempotency
 
