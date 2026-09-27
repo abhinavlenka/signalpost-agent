@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import threading
 import time
 from typing import Any, Callable
@@ -20,8 +21,25 @@ BRREG_ACCOUNTS = "https://data.brreg.no/regnskapsregisteret/regnskap/{org}"
 BRREG_ACCOUNT_YEARS = "https://data.brreg.no/regnskapsregisteret/regnskap/aarsregnskap/kopi/{org}/aar"
 BRREG_ACCOUNT_PDF = "https://data.brreg.no/regnskapsregisteret/regnskap/aarsregnskap/kopi/{org}/{year}"
 BRREG_ROLE_EVENTS = "https://data.brreg.no/enhetsregisteret/api/oppdateringer/roller?organisasjonsnummer={org}&afterTime=2000-01-01T00:00:00.000Z&size=200"
-# The accounts service sheds load with bare 503s; give it patient, jittered retries.
-FLAKY_MODULE_RETRIES = {"financials": {"attempts": 6, "backoff": 1.5}, "financial_history": {"attempts": 4, "backoff": 1.5}}
+# The accounts service answers ~half of requests with bare load-balancer 503s in bursts of a few
+# seconds, independent of the organisation. Concurrency makes it worse, so accounts calls go through a
+# narrow lane with short, steady, jittered retries instead of exponential backoff.
+ACCOUNTS_LANE = threading.BoundedSemaphore(2)
+ACCOUNTS_ATTEMPTS = 8
+FLAKY_MODULE_RETRIES = {"financial_history": {"attempts": 4, "backoff": 1.5}}
+
+
+def fetch_accounts(url: str, purpose: str) -> FetchResult:
+    result: FetchResult | None = None
+    for attempt in range(ACCOUNTS_ATTEMPTS):
+        with ACCOUNTS_LANE:
+            result = fetch_json(url, attempts=1, purpose=purpose)
+        if result.status in {200, 404, 410} or "budget_exhausted" in str(result.error or ""):
+            break
+        time.sleep(1.5 + random.uniform(0, 2.0))
+    assert result is not None
+    result.attempts = attempt + 1
+    return result
 
 _history_lock = threading.Lock()
 _history_last_request = 0.0
@@ -252,7 +270,7 @@ def fetch_official_modules(org: str, modules: set[str], fetcher: Callable[[str],
             options = {"purpose": f"brreg_{module}", **FLAKY_MODULE_RETRIES.get(module, {})}
             if module == "financial_history":
                 _reserve_history_slot()
-            result = fetch_json(url, **options)
+            result = fetch_accounts(url, options["purpose"]) if module == "financials" else fetch_json(url, **options)
         else:
             result = fetcher(url)
         metrics.append(result)

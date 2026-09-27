@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from bs4 import BeautifulSoup
@@ -208,24 +209,115 @@ def normalize_social_url(url: str) -> dict[str, str] | None:
     return {"platform": platform, "url": f"https://{canonical_host}/{'/'.join(parts)}"}
 
 
-def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 4) -> list[str]:
+PAGE_CATEGORIES = (
+    ("about", ("om-oss", "om_oss", "omoss", "about", "hvem-er-vi", "selskapet", "bedriften")),
+    ("contact", ("kontakt", "contact")),
+    ("careers", ("karriere", "career", "jobb", "ledige-stillinger", "stilling", "jobs", "join-us", "bli-med")),
+    ("news", ("nyheter", "news", "aktuelt", "presse", "press", "blogg", "blog", "artikler")),
+    ("people", ("ledelse", "management", "ansatte", "team", "people", "medarbeidere", "vare-folk")),
+    ("locations", ("locations", "lokasjoner", "avdelinger", "butikker", "kontorer", "finn-oss")),
+)
+
+
+def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 5) -> list[str]:
+    """Pick at most one link per page category, in category priority order."""
     base = urllib.parse.urlparse(base_url)
-    candidates: dict[str, int] = {}
+    base_host = base.netloc.lower().removeprefix("www.")
+    best: dict[str, tuple[int, str]] = {}
     for anchor in soup.select("a[href]"):
         href = str(anchor.get("href") or "").strip()
+        if href.startswith(("mailto:", "tel:", "javascript:", "#")):
+            continue
         url = urllib.parse.urljoin(base_url, href)
         parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != base.netloc.lower():
+        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower().removeprefix("www.") != base_host:
             continue
-        haystack = (parsed.path + " " + anchor.get_text(" ", strip=True)).casefold()
-        rank = next((index for index, term in enumerate(PRIORITY_TERMS) if term in haystack), None)
-        if rank is None:
+        if re.search(r"\.(pdf|jpe?g|png|gif|zip|docx?|xlsx?)$", parsed.path, re.I):
             continue
         clean = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path or "/", "", "", ""))
         if clean.rstrip("/") == base_url.rstrip("/"):
             continue
-        candidates[clean] = min(rank, candidates.get(clean, rank))
-    return [url for url, _ in sorted(candidates.items(), key=lambda item: (item[1], item[0]))[:limit]]
+        path = parsed.path.casefold()
+        label = anchor.get_text(" ", strip=True).casefold()
+        for category, terms in PAGE_CATEGORIES:
+            if any(term in path for term in terms):
+                score = 0 + path.count("/")
+            elif any(term.replace("-", " ") in label for term in terms):
+                score = 5 + path.count("/")
+            else:
+                continue
+            if category not in best or score < best[category][0]:
+                best[category] = (score, clean)
+            break
+    ordered = [best[category][1] for category, _ in PAGE_CATEGORIES if category in best]
+    return list(dict.fromkeys(ordered))[:limit]
+
+
+def page_category(url: str) -> str | None:
+    path = urllib.parse.urlparse(url).path.casefold()
+    return next((category for category, terms in PAGE_CATEGORIES if any(term in path for term in terms)), None)
+
+
+DATE_PATTERN = re.compile(r"(20\d{2})-(\d{2})-(\d{2})")
+
+
+def _iso_date(value: Any) -> str | None:
+    match = DATE_PATTERN.search(str(value or ""))
+    if not match:
+        return None
+    try:
+        parsed = datetime(int(match.group(1)), int(match.group(2)), int(match.group(3)), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    if parsed > datetime.now(timezone.utc) + timedelta(days=1):
+        return None
+    return parsed.date().isoformat()
+
+
+def dated_items(html: str, page_url: str, soup: BeautifulSoup) -> list[dict[str, Any]]:
+    """Dated news/article items from JSON-LD and <time datetime> markup (no free-text date guessing)."""
+    items: dict[str, dict[str, Any]] = {}
+    try:
+        structured = extruct.extract(html, base_url=page_url, syntaxes=["json-ld"]).get("json-ld", [])
+    except Exception:
+        structured = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            kinds = node.get("@type")
+            kinds = set(kinds if isinstance(kinds, list) else [kinds])
+            if kinds & {"NewsArticle", "BlogPosting", "Article", "PressRelease", "Report"}:
+                date = _iso_date(node.get("datePublished") or node.get("dateCreated"))
+                title = node.get("headline") or node.get("name")
+                url = node.get("url") or node.get("mainEntityOfPage") or page_url
+                if isinstance(url, dict):
+                    url = url.get("@id") or page_url
+                if date and title and isinstance(title, str):
+                    items[str(url) + date] = {"date": date, "title": title.strip()[:200], "url": str(url), "locator": "script[type='application/ld+json']"}
+            for child in node.values():
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(structured)
+    for time_node in soup.select("time[datetime]")[:60]:
+        date = _iso_date(time_node.get("datetime"))
+        if not date:
+            continue
+        container = time_node.find_parent(["article", "li"]) or time_node.parent
+        heading = container.find(["h1", "h2", "h3", "h4"]) if container else None
+        link = (heading.find("a", href=True) if heading else None) or (container.find("a", href=True) if container else None)
+        title = (heading or link).get_text(" ", strip=True) if (heading or link) else ""
+        if not title or len(title) < 8:
+            continue
+        url = urllib.parse.urljoin(page_url, link.get("href")) if link else page_url
+        items.setdefault(url + date, {"date": date, "title": title[:200], "url": url, "locator": "time[datetime]"})
+    unique: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in items.values():
+        item["url"] = str(item["url"]).split("#", 1)[0]
+        unique.setdefault((item["title"].casefold(), item["date"]), item)
+    return sorted(unique.values(), key=lambda item: item["date"], reverse=True)[:12]
 
 
 def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max_bytes: int) -> tuple[dict[str, Any] | None, list[dict[str, str]], int, int, int, str | None]:
@@ -246,6 +338,8 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
         page_soup = BeautifulSoup(page_html, "lxml")
         page_text = trafilatura.extract(page_html, url=final_url, include_links=False, include_tables=False, favor_precision=True) or ""
         page = {
+            "category": page_category(url),
+            "dated_items": dated_items(page_html, final_url, page_soup),
             "url": final_url,
             "title": page_soup.title.get_text(" ", strip=True)[:500] if page_soup.title else "",
             "main_text_excerpt": page_text[:5000],
@@ -322,6 +416,7 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
             "structured_organisations": _jsonld_organisations(structured),
             "content_sha256": __import__("hashlib").sha256(raw).hexdigest(),
             "extraction_state": _extraction_state(text, soup),
+            "site_name": next((str(node.get("content")).strip() for node in soup.select('meta[property="og:site_name"]') if node.get("content")), None),
         }
         pages = [{"url": final_url, "title": title[:500], "main_text_excerpt": text[:5000], "content_sha256": value["content_sha256"]}]
         social = value["social_links"]
@@ -347,6 +442,11 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
             elif page_error:
                 crawl_errors.append({"url": page_url, "error": page_error})
         value["pages"] = pages
+        news: dict[str, dict[str, Any]] = {}
+        for item in dated_items(html, final_url, soup) + [item for page in pages[1:] for item in page.get("dated_items") or []]:
+            news.setdefault(item["title"].casefold() + item["date"], item)
+        value["news_items"] = sorted(news.values(), key=lambda item: item["date"], reverse=True)[:12]
+        value["careers_pages"] = [page["url"] for page in pages[1:] if page.get("category") == "careers"]
         value["social_links"] = list({(item["platform"], item["url"]): item for item in social}.values())
         value["crawl_errors"] = crawl_errors
         return evidence("website", "available", "registry_linked_company_website", final_url, value=value, note="Company-controlled claim layer; not an official registry fact", content_sha256=value["content_sha256"]), {"requests": requests, "bytes": bytes_received, "latencies_ms": page_latencies}

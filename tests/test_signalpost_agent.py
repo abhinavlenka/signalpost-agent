@@ -15,7 +15,7 @@ from norway_company_agent.budget import BudgetExhausted, RequestBudget, set_acti
 from norway_company_agent.claim_refresh import apply_refresh  # noqa: E402
 from norway_company_agent.envelope import STATES, build_envelope  # noqa: E402
 from norway_company_agent.evidence import evidence  # noqa: E402
-from norway_company_agent.jobs_nav import match_company_jobs, name_key  # noqa: E402
+from norway_company_agent.jobs_nav import build_name_index, candidate_ads, match_company_jobs  # noqa: E402
 from norway_company_agent.http import FetchResult  # noqa: E402
 from norway_company_agent.pipeline import read_input_orgs  # noqa: E402
 from norway_company_agent.summary import build_summary  # noqa: E402
@@ -183,7 +183,18 @@ def test_jobs_publish_only_on_exact_orgnr():
     ads = {"u1": {"ad_content": {"uuid": "u1", "title": "Montør", "employer": {"orgnr": "888567232", "name": "Aas Elektronikk AS"}}},
            "u2": {"ad_content": {"uuid": "u2", "title": "Selger", "employer": {"orgnr": "999999999", "name": "Aas Elektronikk AS"}}},
            "u3": {"ad_content": {"uuid": "u3", "title": "Lager", "employer": {"orgnr": "985636230", "name": "Aas Elektronikk AS"}}}}
-    name_index = {name_key("Aas Elektronikk AS"): [{"uuid": uuid, "modified": uuid} for uuid in ads]}
+    name_index = build_name_index([{"uuid": uuid, "modified": uuid, "status": "ACTIVE", "business_name": "Aas Elektronikk AS"} for uuid in ads])
     result = match_company_jobs(FakeIndex(ads), name_index, organisation_number="888567232", names=["AAS ELEKTRONIKK AS"], subunit_orgs=["985636230"])
     assert sorted(job["uuid"] for job in result["jobs"]) == ["u1", "u3"]
     assert [item["uuid"] for item in result["rejected"]] == ["u2"]
+
+
+def test_token_set_candidates_keep_initials_and_skip_generic_names():
+    ads = [{"uuid": str(i), "status": "ACTIVE", "business_name": name, "modified": str(i)} for i, name in enumerate(
+        ["Supermercado AS - Frukthagen Tåsen", "GP-Invest As", "Hakkespetten Barnehage", "Avdeling fritid, Porsgrunn kommune", "Slemdal skole"])]
+    index = build_name_index(ads)
+    names = lambda name: [ad["business_name"] for ad in candidate_ads(index, [name])]  # noqa: E731
+    assert names("SUPERMERCADO AS") == ["Supermercado AS - Frukthagen Tåsen"]
+    assert names("J.A. INVEST AS") == []
+    assert names("FRITID AS") == []
+    assert names("HAKKESPETTEN BARNEHAGE AS") == ["Hakkespetten Barnehage"]

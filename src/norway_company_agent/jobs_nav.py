@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 import threading
+import unicodedata
 import time
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
@@ -31,8 +32,28 @@ PUBLIC_TOKEN_URL = FEED_BASE + "/api/publicToken"
 PUBLIC_AD_URL = "https://arbeidsplassen.nav.no/stillinger/stilling/{uuid}"
 
 
+GENERIC_TOKENS = {
+    "holding", "holdings", "invest", "investering", "investment", "eiendom", "eiendommer", "eiendomsselskap", "bygg",
+    "drift", "service", "services", "gruppen", "group", "norge", "norway", "norsk", "consult", "consulting", "fritid",
+    "klinikken", "profil", "solutions", "partner", "partners", "capital", "management", "utvikling", "handel", "og", "i",
+    "of", "og", "vs", "kommune", "senter", "senteret", "systems", "system", "company", "nordic", "scandinavia",
+}
+
+
 def name_key(value: Any) -> str:
     return " ".join(_tokens(value))
+
+
+def raw_tokens(value: Any) -> list[str]:
+    """Tokens including single-letter initials (so "J.A. Invest" never reduces to "invest")."""
+    text = str(value or "").translate(str.maketrans({"ø": "o", "Ø": "O", "å": "a", "Å": "A", "æ": "ae", "Æ": "AE"})).casefold()
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    legal = {"as", "asa", "ans", "da", "enk", "sa", "nuf", "ab", "ltd", "avd", "avdeling"}
+    return [token for token in re.findall(r"[a-z0-9]+", text) if token not in legal]
+
+
+def token_set_eligible(tokens: list[str]) -> bool:
+    return any(len(token) >= 5 and token not in GENERIC_TOKENS and not token.isdigit() for token in tokens)
 
 
 class NavJobIndex:
@@ -106,15 +127,8 @@ class NavJobIndex:
             self._ready.set()
 
     # -- matching ------------------------------------------------------------------------------
-    def build_name_index(self) -> dict[str, list[dict[str, Any]]]:
-        index: dict[str, list[dict[str, Any]]] = {}
-        for ad in self.ads.values():
-            if ad.get("status") != "ACTIVE":
-                continue
-            key = name_key(ad.get("business_name"))
-            if key:
-                index.setdefault(key, []).append(ad)
-        return index
+    def build_name_index(self) -> dict[str, Any]:
+        return build_name_index(self.ads.values())
 
     def fetch_entry(self, ad: dict[str, Any]) -> FetchResult:
         path = ad.get("entry_path") or f"/api/v1/feedentry/{ad['uuid']}"
@@ -131,6 +145,39 @@ class NavJobIndex:
             "started_at": self.started_at,
             "completed_at": self.completed_at,
         }
+
+
+def build_name_index(ads: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    exact: dict[str, list[dict[str, Any]]] = {}
+    by_token: dict[str, list[dict[str, Any]]] = {}
+    for ad in ads:
+        if ad.get("status") != "ACTIVE":
+            continue
+        key = name_key(ad.get("business_name"))
+        if key:
+            exact.setdefault(key, []).append(ad)
+        for token in set(raw_tokens(ad.get("business_name"))):
+            by_token.setdefault(token, []).append(ad)
+    return {"exact": exact, "tokens": by_token}
+
+
+def candidate_ads(name_index: dict[str, Any], names: Iterable[str], *, token_limit: int = 4) -> list[dict[str, Any]]:
+    """Exact normalized-name matches first, then token-set matches (all name tokens present)."""
+    exact: dict[str, dict[str, Any]] = {}
+    loose: dict[str, dict[str, Any]] = {}
+    for name in names:
+        for ad in name_index["exact"].get(name_key(name), []):
+            exact[ad["uuid"]] = ad
+        tokens = raw_tokens(name)
+        if not tokens or not token_set_eligible(tokens):
+            continue
+        pools = [{ad["uuid"]: ad for ad in name_index["tokens"].get(token, [])} for token in set(tokens)]
+        shared = set.intersection(*[set(pool) for pool in pools]) if pools else set()
+        for uuid in shared:
+            if uuid not in exact:
+                loose[uuid] = pools[0][uuid]
+    newest = lambda ads: sorted(ads, key=lambda ad: str(ad.get("modified") or ""), reverse=True)  # noqa: E731
+    return newest(exact.values()) + newest(loose.values())[:token_limit]
 
 
 def normalize_ad(entry: dict[str, Any], retrieved: FetchResult) -> dict[str, Any]:
@@ -164,7 +211,7 @@ def normalize_ad(entry: dict[str, Any], retrieved: FetchResult) -> dict[str, Any
 
 def match_company_jobs(
     index: NavJobIndex,
-    name_index: dict[str, list[dict[str, Any]]],
+    name_index: dict[str, Any],
     *,
     organisation_number: str,
     names: Iterable[str],
@@ -173,12 +220,8 @@ def match_company_jobs(
 ) -> dict[str, Any]:
     """Return verified jobs plus rejected candidates for one company."""
     allowed = {organisation_number, *[org for org in subunit_orgs if org]}
-    keys = {name_key(name) for name in names if name_key(name)}
-    candidates: dict[str, dict[str, Any]] = {}
-    for key in keys:
-        for ad in name_index.get(key, []):
-            candidates[ad["uuid"]] = ad
-    ordered = sorted(candidates.values(), key=lambda ad: str(ad.get("modified") or ""), reverse=True)
+    ordered = candidate_ads(name_index, names)
+    candidates = {ad["uuid"]: ad for ad in ordered}
     jobs, rejected, errors = [], [], []
     for ad in ordered[:max_entries]:
         if active_budget().remaining <= 0:

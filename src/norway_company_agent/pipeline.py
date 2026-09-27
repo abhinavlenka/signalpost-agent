@@ -146,6 +146,8 @@ def research_official(profile: dict[str, Any]) -> None:
 
 def research_website(profile: dict[str, Any], url: str | None, *, discovery: str, declared_by: dict[str, Any] | None = None) -> bool:
     record, _ = fetch_website(url)
+    if isinstance(record.get("value"), dict):
+        record["value"]["registry_listed"] = discovery == "registry_listed"
     if declared_by and record.get("status") == "available":
         record["source_type"] = record["source_class"] = "employer_declared_homepage"
     gated = apply_website_identity_gate(profile, record)["website"]
@@ -192,7 +194,7 @@ def research_company(profile: dict[str, Any]) -> dict[str, Any]:
     return profile
 
 
-def attach_jobs(profile: dict[str, Any], index: NavJobIndex, name_index: dict[str, list[dict[str, Any]]]) -> None:
+def attach_jobs(profile: dict[str, Any], index: NavJobIndex, name_index: dict[str, Any]) -> None:
     ev = profile["evidence"]
     if index.error and not index.ads:
         ev["jobs"] = evidence("jobs", "source_error", "official_job_register_nav", "https://pam-stilling-feed.nav.no/api/v1/feed", note=index.error)

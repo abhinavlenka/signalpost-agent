@@ -32,6 +32,13 @@ def _structured_names(value: Any) -> list[str]:
     return names
 
 
+def _domain_label(hostname: str) -> str:
+    labels = [label for label in hostname.lower().split(".") if label and label != "www"]
+    if len(labels) < 2:
+        return ""
+    return "".join(_tokens(labels[-2].replace("-", " "))) if labels[-2] else ""
+
+
 def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
     website = profile.get("evidence", {}).get("website", {})
     value = website.get("value") or {}
@@ -85,6 +92,9 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
     elif len(core) == 1 and exact_homepage_name and substantive_homepage:
         score = 0.95
         reasons.append("single distinctive legal-name token appears in homepage identity evidence with substantive content")
+    elif core and value.get("registry_listed") and _domain_label(hostname) == "".join(core) and len("".join(core)) >= 5:
+        score = 0.93
+        reasons.append("the official register lists this domain and its name equals the full normalized legal name")
     elif ratio >= 0.75 and len(overlap) >= 2:
         score = 0.85
         reasons.append("most legal-name tokens appear, but exact identity is incomplete")

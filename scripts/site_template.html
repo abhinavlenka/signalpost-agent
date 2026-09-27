@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signalpost Explorer</title>
+<style>
+:root {
+  --bg: #f7f7f5; --surface: #ffffff; --text: #1c1d1f; --muted: #62656b; --line: #e3e3df;
+  --accent: #1f5fbf; --accent-soft: #e6eefb; --ok: #1d7a46; --ok-soft: #e3f3ea; --warn: #9a5b00; --warn-soft: #fbf0dc;
+  --bad: #a8302a; --bad-soft: #f9e4e2; --na: #6b6f76; --na-soft: #eeeeec;
+  --radius: 10px; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.04);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131416; --surface: #1c1d20; --text: #ececea; --muted: #a0a3a9; --line: #2e3034;
+    --accent: #7fb0ff; --accent-soft: #1d2a40; --ok: #6fd39b; --ok-soft: #173024; --warn: #f0b660; --warn-soft: #3a2d15;
+    --bad: #ff8b82; --bad-soft: #3d1c1a; --na: #a0a3a9; --na-soft: #26282b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131416; --surface: #1c1d20; --text: #ececea; --muted: #a0a3a9; --line: #2e3034;
+  --accent: #7fb0ff; --accent-soft: #1d2a40; --ok: #6fd39b; --ok-soft: #173024; --warn: #f0b660; --warn-soft: #3a2d15;
+  --bad: #ff8b82; --bad-soft: #3d1c1a; --na: #a0a3a9; --na-soft: #26282b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+header { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.bar { max-width: 1200px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.brand { font-weight: 700; letter-spacing: -.01em; font-size: 17px; margin-right: 8px; }
+.brand span { color: var(--muted); font-weight: 500; }
+input[type=search] { flex: 1 1 260px; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px; padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+.meta { color: var(--muted); font-size: 13px; margin: 0 0 12px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; background: var(--surface); }
+tbody tr { cursor: pointer; } tbody tr:hover { background: var(--accent-soft); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.name { font-weight: 600; } .sub { color: var(--muted); font-size: 12.5px; }
+.dots { display: flex; gap: 3px; flex-wrap: wrap; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--na-soft); border: 1px solid var(--line); }
+.dot.available { background: var(--ok); border-color: var(--ok); } .dot.failed, .dot.blocked { background: var(--bad); border-color: var(--bad); } .dot.ambiguous { background: var(--warn); border-color: var(--warn); }
+.badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--na-soft); color: var(--na); white-space: nowrap; }
+.badge.available { background: var(--ok-soft); color: var(--ok); } .badge.failed, .badge.blocked { background: var(--bad-soft); color: var(--bad); }
+.badge.ambiguous { background: var(--warn-soft); color: var(--warn); }
+.cmp { width: 18px; height: 18px; }
+.detail h1 { font-size: 24px; margin: 4px 0 2px; letter-spacing: -.01em; }
+.back { display: inline-block; margin-bottom: 8px; font-size: 14px; }
+.grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 16px; }
+.pad { padding: 16px; }
+.summary p { margin: 0 0 8px; }
+sup.ref a { font-size: 11px; margin-left: 1px; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+.section { margin-top: 16px; }
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.fam { display: flex; gap: 6px; flex-wrap: wrap; }
+.claims td { font-size: 14px; }
+.claims td.field { color: var(--muted); white-space: nowrap; width: 22%; }
+.ev { font-size: 12px; color: var(--muted); }
+.ev code { font-family: var(--mono); font-size: 11.5px; }
+.claim-row:target, .claim-row.flash { background: var(--warn-soft); }
+.change { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; } .change:last-child { border: 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; } .kv div:nth-child(odd) { color: var(--muted); }
+.empty { padding: 32px; text-align: center; color: var(--muted); }
+.compare-bar { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); border-radius: 999px; padding: 8px 8px 8px 16px; display: none; gap: 10px; align-items: center; box-shadow: var(--shadow); z-index: 6; }
+.compare-bar button { border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; cursor: pointer; background: var(--accent); color: #fff; }
+.theme { margin-left: auto; }
+.stale { opacity: .65; }
+@media (max-width: 820px) {
+  .grid { grid-template-columns: 1fr; }
+  table.list thead { display: none; }
+  table.list tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  table.list td { border: 0; padding: 0; }
+  table.list td.hide-m { display: none; }
+  table.list td.num { text-align: left; }
+  .claims td.field { width: auto; display: block; padding-bottom: 0; border: 0; }
+  .claims tr { display: block; border-bottom: 1px solid var(--line); }
+  .claims td { display: block; }
+  .theme { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand">Signalpost <span>explorer</span></div>
+    <input id="q" type="search" placeholder="Search name, org number, municipality, industry…" aria-label="Search companies">
+    <div class="chips" role="group" aria-label="Filters">
+      <button class="chip" data-f="w" aria-pressed="false">Verified website</button>
+      <button class="chip" data-f="j" aria-pressed="false">Hiring</button>
+      <button class="chip" data-f="r" aria-pressed="false">Has accounts</button>
+      <button class="chip" data-f="c" aria-pressed="false">Changed</button>
+    </div>
+    <button class="chip theme" id="theme" aria-label="Toggle colour theme">◐</button>
+  </div>
+</header>
+<main id="app"><div class="empty">Loading…</div></main>
+<div class="compare-bar" id="cbar"><span id="ctext"></span><button id="cgo">Compare</button></div>
+<script>
+const FAMILIES = {legal_identity:"Legal identity", public_brand:"Public brand", group_relationships:"Group", annual_accounts:"Accounts", filing_history:"Filings", leadership:"Leadership", registered_workplaces:"Workplaces", official_website:"Website", company_profiles:"Profiles", jobs:"Jobs", dated_activity:"Activity"};
+const SECTION_TITLES = {legal_identity:"Legal identity and public brand", annual_accounts:"Annual accounts and history", leadership_workplaces:"Leadership and registered workplaces", web_presence:"Official website and company-owned profiles", hiring_activity:"Hiring and dated public activity"};
+let rows = [], filters = new Set(), selected = new Set(), cache = {};
+const $ = (s, el=document) => el.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const nok = v => v == null ? "—" : new Intl.NumberFormat("nb-NO", {notation: Math.abs(v) >= 1e6 ? "compact" : "standard", maximumFractionDigits: 1}).format(v);
+const safeUrl = u => /^https?:\/\//i.test(String(u||"")) ? String(u) : null;
+const link = (u, label) => safeUrl(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(label || u)}</a>` : esc(label || u || "");
+
+try { const t = localStorage.getItem("sp-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+$("#theme").onclick = () => { const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; try { localStorage.setItem("sp-theme", next); } catch (e) {} };
+
+async function load() {
+  rows = await (await fetch("data/index.json")).json();
+  route();
+}
+async function company(org) {
+  if (!cache[org]) cache[org] = await (await fetch(`data/c/${org}.json`)).json();
+  return cache[org];
+}
+function dots(a) { return `<span class="dots" title="${esc(Object.entries(a||{}).map(([k,v])=>`${FAMILIES[k]||k}: ${v}`).join("\n"))}">` + Object.keys(FAMILIES).map(k => `<span class="dot ${esc((a||{})[k]||"")}"></span>`).join("") + "</span>"; }
+
+function renderList() {
+  const q = $("#q").value.trim().toLowerCase();
+  const list = rows.filter(r => (!q || [r.n, r.o, r.m, r.i].some(v => String(v||"").toLowerCase().includes(q)))
+    && (!filters.has("w") || r.w) && (!filters.has("j") || r.j) && (!filters.has("r") || r.r != null) && (!filters.has("c") || r.c));
+  const shown = list.slice(0, 300);
+  $("#app").innerHTML = `<p class="meta"><span>${list.length} of ${rows.length} companies${list.length > 300 ? " (showing 300 — refine search)" : ""}</span><span>Coverage dots: ${Object.values(FAMILIES).join(" · ")}</span></p>
+  <div class="card"><table class="list"><thead><tr><th></th><th>Company</th><th class="hide-m">Industry</th><th class="num">Revenue</th><th class="num">Result</th><th class="num hide-m">Employees</th><th class="hide-m">Signals</th><th>Coverage</th></tr></thead><tbody>
+  ${shown.map(r => `<tr data-o="${esc(r.o)}"><td><input type="checkbox" class="cmp" aria-label="Select ${esc(r.n)} to compare" data-o="${esc(r.o)}" ${selected.has(r.o) ? "checked" : ""}></td>
+    <td><div class="name">${esc(r.n)}</div><div class="sub">${esc(r.o)} · ${esc(r.f||"")} · ${esc(r.m||"")}</div></td>
+    <td class="hide-m sub">${esc(r.i||"—")}</td><td class="num">${nok(r.r)}</td><td class="num">${nok(r.p)}</td><td class="num hide-m">${r.e ?? "—"}</td>
+    <td class="hide-m">${r.w ? '<span class="badge available">web</span> ' : ""}${r.j ? `<span class="badge available">${r.j} job${r.j>1?"s":""}</span> ` : ""}${r.c ? `<span class="badge ambiguous">${r.c} change${r.c>1?"s":""}</span>` : ""}</td>
+    <td>${dots(r.a)}</td></tr>`).join("")}
+  </tbody></table>${list.length ? "" : '<div class="empty">No companies match.</div>'}</div>`;
+  $("#app").querySelectorAll("tbody tr").forEach(tr => tr.onclick = e => { if (e.target.classList.contains("cmp")) return; location.hash = `#/c/${tr.dataset.o}`; });
+  $("#app").querySelectorAll(".cmp").forEach(cb => cb.onchange = () => { cb.checked ? selected.add(cb.dataset.o) : selected.delete(cb.dataset.o); if (selected.size > 4) { selected.delete(cb.dataset.o); cb.checked = false; } updateBar(); });
+  updateBar();
+}
+function updateBar() { const bar = $("#cbar"); bar.style.display = selected.size >= 2 ? "flex" : "none"; $("#ctext").textContent = `${selected.size} selected`; }
+$("#cgo").onclick = () => location.hash = `#/compare/${[...selected].join(",")}`;
+
+function fmtValue(c) {
+  const v = c.value;
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    if ("amount" in v) return `${nok(v.amount)} ${esc(v.currency||"")}`;
+    if (c.field === "open_job") return `${link(v.public_url, v.title)}<div class="sub">${esc([v.published && "published " + v.published.slice(0,10), v.expires && "expires " + v.expires.slice(0,10), (v.work_locations||[]).map(l => l.city || l.municipal).filter(Boolean).join(", ")].filter(Boolean).join(" · "))}</div>`;
+    if ("date" in v && "title" in v) return `${esc(v.date || v.year || "")} — ${v.url ? link(v.url, v.title) : esc(v.title)}`;
+    if ("role" in v) return `${esc(v.name)} <span class="sub">${esc(v.role)}</span>`;
+    if (c.family === "registered_workplaces") return `${esc(v.name)} <span class="sub">${esc(v.address||"")}${v.registered_employees ? " · " + esc(v.registered_employees) + " employees" : ""}</span>`;
+    if (c.family === "group_relationships") return `${esc(v.relation)}: ${esc(v.name)} <span class="sub">${esc(v.organisation_number)} · ${esc(v.ownership_basis||"")}</span>`;
+    if ("beskrivelse" in v) return `${esc(v.beskrivelse)} <span class="sub">${esc(v.kode)}</span>`;
+    return `<code>${esc(JSON.stringify(v))}</code>`;
+  }
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (safeUrl(v)) return link(v);
+  return esc(v);
+}
+function evidenceHtml(c, evidence) {
+  return (c.evidence_ids||[]).map(id => { const e = evidence[id]; if (!e) return ""; return `<div class="ev">${link(e.final_url || e.source_url, (e.source_class||"source").replace(/_/g," "))} · retrieved ${esc((e.retrieved_at||"").slice(0,16).replace("T"," "))} · <code title="${esc(e.content_sha256||"")}">${esc((e.content_sha256||"").slice(0,10))}</code>${c.locator ? ` · <code>${esc(c.locator)}</code>` : ""}${e.from_previous_run ? " · from previous run" : ""}</div>`; }).join("");
+}
+
+async function renderCompany(org) {
+  const env = await company(org);
+  const evidence = Object.fromEntries((env.evidence||[]).map(e => [e.evidence_id, e]));
+  const claimsById = Object.fromEntries((env.claims||[]).map(c => [c.claim_id, c]));
+  const s = env.summary || {};
+  const summary = (s.sentences||[]).map(x => `${esc(x.text)}<sup class="ref">${x.claim_ids.slice(0,4).map((id,i) => `<a href="#/c/${esc(org)}/${esc(id)}">[${i+1}]</a>`).join("")}</sup>`).join(" ");
+  const bySection = {};
+  (env.claims||[]).forEach(c => (bySection[c.section] = bySection[c.section] || []).push(c));
+  const changes = env.changes || [];
+  const log = env.change_log || [];
+  $("#app").innerHTML = `<div class="detail"><a class="back" href="#/">← All companies</a>
+    <h1>${esc(env.legal_name)}</h1><div class="sub">Org. no. ${esc(env.organisation_number)} · run ${esc(env.run?.run_id)} · ${esc((env.run?.completed_at||"").slice(0,10))} · <span class="badge ${esc(env.state)}">${esc(env.state)}</span></div>
+    <div class="grid">
+      <div class="card pad summary"><h2>Summary</h2><p>${summary || "No supported facts."}</p>${s.changes_text ? `<p><strong>${esc(s.changes_text)}</strong></p>` : ""}${s.unknowns_text ? `<p class="sub">${esc(s.unknowns_text)}</p>` : ""}</div>
+      <div class="card pad"><h2>Changes since previous run</h2>${changes.length ? changes.map(ch => `<div class="change"><span class="badge ${ch.material ? "ambiguous" : ""}">${esc(ch.change_type.replace(/_/g," "))}</span> ${esc(FAMILIES[ch.family]||ch.family)}<div class="sub">${esc(JSON.stringify(ch.previous_value ?? "—")).slice(0,120)} → ${esc(JSON.stringify(ch.current_value ?? "—")).slice(0,120)}</div></div>`).join("") : `<p class="sub">${env.refresh?.mode === "diff" ? "No changes detected." : "First observation — no previous run."}</p>`}
+      ${log.length > changes.length ? `<p class="sub">${log.length} changes recorded across all runs.</p>` : ""}
+      <h2 style="margin-top:14px">Field states</h2><div class="kv">${Object.entries(env.availability||{}).map(([k,v]) => `<div>${esc(FAMILIES[k]||k)}</div><div><span class="badge ${esc(v)}">${esc(v)}</span></div>`).join("")}</div></div>
+    </div>
+    ${Object.entries(env.sections||{}).map(([key, sec]) => `<div class="card section"><div class="section-head"><h2 style="margin:0">${esc(SECTION_TITLES[key]||sec.title)}</h2><div class="fam">${Object.entries(sec.fields||{}).map(([f, st]) => `<span class="badge ${esc(st.state)}" title="${esc(st.reason||"")}">${esc(FAMILIES[f]||f)}: ${esc(st.state)}</span>`).join("")}</div></div>
+      ${(bySection[key]||[]).length ? `<table class="claims"><tbody>${bySection[key].map(c => `<tr class="claim-row ${c.stale ? "stale" : ""}" id="${esc(c.claim_id)}"><td class="field">${esc(c.field.replace(/_/g," "))}${c.reporting_period ? `<div class="sub">${esc(c.reporting_period)}</div>` : ""}</td><td>${fmtValue(c)}${c.stale ? ' <span class="badge">not re-verified this run</span>' : ""}${evidenceHtml(c, evidence)}</td></tr>`).join("")}</tbody></table>`
+        : `<div class="pad sub">${Object.values(sec.fields||{}).map(st => esc(st.reason||st.state)).filter(Boolean).join(" · ")}</div>`}</div>`).join("")}
+  </div>`;
+}
+
+async function renderCompare(orgs) {
+  const envs = await Promise.all(orgs.map(company));
+  const pick = (env, family, field) => (env.claims||[]).filter(c => c.family === family && c.field === field && !c.stale);
+  const latest = (env, field) => { const cs = pick(env, "annual_accounts", field); if (!cs.length) return "—"; const c = cs.sort((a,b) => (b.reporting_period||"").localeCompare(a.reporting_period||""))[0]; return nok(c.value.amount); };
+  const lines = [
+    ["Org. no.", e => esc(e.organisation_number)], ["Legal form", e => esc(pick(e,"legal_identity","legal_form")[0]?.value || "—")],
+    ["Municipality", e => esc(pick(e,"legal_identity","municipality")[0]?.value || "—")], ["Industry", e => esc(pick(e,"legal_identity","industry")[0]?.value?.beskrivelse || "—")],
+    ["Founded", e => esc(pick(e,"legal_identity","founded_date")[0]?.value || "—")], ["Registered employees", e => esc(pick(e,"legal_identity","registered_employees")[0]?.value ?? "—")],
+    ["Revenue", e => latest(e,"revenue")], ["Operating result", e => latest(e,"operating_result")], ["Net result", e => latest(e,"annual_result")], ["Equity", e => latest(e,"equity")],
+    ["CEO", e => esc(pick(e,"leadership","role").find(c => c.value.role_code === "DAGL")?.value.name || "—")],
+    ["Chair", e => esc(pick(e,"leadership","role").find(c => c.value.role_code === "LEDE")?.value.name || "—")],
+    ["Workplaces", e => pick(e,"registered_workplaces","registered_workplace").length || "—"],
+    ["Website", e => { const w = pick(e,"official_website","official_website")[0]; return w ? link(w.value) : `<span class="badge">${esc(e.availability?.official_website)}</span>`; }],
+    ["Open jobs", e => pick(e,"jobs","open_job").length || `<span class="badge">${esc(e.availability?.jobs)}</span>`],
+    ["Changes", e => (e.changes||[]).length],
+  ];
+  $("#app").innerHTML = `<a class="back" href="#/">← All companies</a><div class="card" style="overflow-x:auto"><table><thead><tr><th></th>${envs.map(e => `<th><a href="#/c/${esc(e.organisation_number)}">${esc(e.legal_name)}</a></th>`).join("")}</tr></thead>
+    <tbody>${lines.map(([label, fn]) => `<tr style="cursor:default"><td class="sub">${label}</td>${envs.map(e => `<td>${fn(e)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+async function route() {
+  const h = location.hash.slice(1);
+  let m;
+  try {
+    if ((m = h.match(/^\/c\/(\d{9})(?:\/(cl-[0-9a-f]+))?/))) { await renderCompany(m[1]); if (m[2]) { const el = document.getElementById(m[2]); if (el) { el.scrollIntoView({block: "center"}); el.classList.add("flash"); } } else window.scrollTo(0, 0); }
+    else if ((m = h.match(/^\/compare\/([\d,]+)/))) await renderCompare(m[1].split(",").filter(o => /^\d{9}$/.test(o)).slice(0, 4));
+    else renderList();
+  } catch (err) { $("#app").innerHTML = `<div class="empty">Could not load: ${esc(err.message)}</div>`; }
+}
+$("#q").oninput = () => { if (location.hash.length > 2) location.hash = "#/"; renderList(); };
+document.querySelectorAll(".chip[data-f]").forEach(b => b.onclick = () => { const f = b.dataset.f; filters.has(f) ? filters.delete(f) : filters.add(f); b.setAttribute("aria-pressed", filters.has(f)); if (location.hash.length > 2) location.hash = "#/"; renderList(); });
+addEventListener("hashchange", route);
+load();
+</script>
+</body>
+</html>

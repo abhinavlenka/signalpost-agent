@@ -168,7 +168,7 @@ def record_state(record: dict[str, Any] | None) -> tuple[str, str | None]:
         return "not_available", note or "source returned no record"
     if status == "not_applicable":
         return "not_applicable", note or None
-    if status == "blocked":
+    if status == "blocked" or any(code in note for code in ("HTTP 401", "HTTP 403", "HTTP 429", "HTTP 451")):
         return "blocked", note or "source refused access"
     return "failed", note or "source error"
 
@@ -370,12 +370,24 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
                           span="profile linked from the verified company website")
         if not social:
             builder.state("company_profiles", "not_available", "verified website links no company-owned social profiles")
+        for page in value.get("careers_pages") or []:
+            builder.claim("jobs", "careers_page", page, eid, identity=["careers_page", page], locator="a[href]",
+                          span="careers page on the verified company website")
         for item in value.get("news_items") or []:
             builder.claim("dated_activity", "website_news", {"date": item.get("date"), "title": item.get("title"), "url": item.get("url")},
                           eid, identity=["website_news", item.get("url")], effective_date=item.get("date"), locator=item.get("locator"))
     elif state == "available":
         builder.state("official_website", "ambiguous", "candidate site failed exact-entity identity gate: " + "; ".join(assessment.get("reasons") or []),
                       candidate=value.get("final_url"))
+        if value.get("discovery_method") == "registry_listed" and value.get("final_url"):
+            # True, labelled fact: the register lists this site. It may be a brand, parent or franchise
+            # site, so it is not published as the official website and nothing is extracted from it.
+            reg = ev.get("registry_live") or {}
+            reg_eid = _official_evidence(builder, reg, "brreg_entity_json_v1") if reg.get("status") == "available" else builder.add_evidence(
+                source_url=value.get("requested_url") or website.get("source_url"), final_url=value.get("final_url"), source_class="registry_linked_company_website",
+                retrieved_at=website.get("retrieved_at"), content_sha256=value.get("content_sha256"), extraction_method="registry_hjemmeside_v1")
+            builder.claim("public_brand", "registry_declared_site", {"url": value.get("final_url"), "relation": "declared in the official register; exact-entity identity not verified (possible brand, parent or franchise site)"},
+                          reg_eid, identity="registry_declared_site", locator="$.hjemmeside", confidence=0.6)
         builder.state("company_profiles", "ambiguous", "no verified website to anchor company-owned profiles")
     else:
         if state == "not_available":
