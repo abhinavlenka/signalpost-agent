@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/*.csv
+data/*.gz
+data/*.jsonl
+!data/universe-metadata.json
+out/
