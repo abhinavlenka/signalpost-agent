@@ -309,7 +309,7 @@ def attach_jobs(profile: dict[str, Any], index: NavJobIndex, name_index: dict[st
     locations = ((ev.get("locations") or {}).get("value") or {}).get("locations") or []
     names = [profile.get("name"), *[item.get("name") for item in locations]]
     live_value = (ev.get("registry_live") or {}).get("value") or {}
-    names.extend(live_value.get("historical_names") or [])
+    names.extend(item.get("navn") if isinstance(item, dict) else item for item in live_value.get("historical_names") or [])
     result = match_company_jobs(
         index, name_index,
         organisation_number=profile["organisation_number"],

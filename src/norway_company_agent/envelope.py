@@ -224,7 +224,10 @@ def build_identity(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
         if value.get("has_registered_employees") and value.get("employees") is not None:
             builder.claim("legal_identity", "registered_employees", value.get("employees"), eid, identity="registered_employees", locator="$.antallAnsatte")
         for index, previous in enumerate(value.get("historical_names") or []):
-            builder.claim("public_brand", "previous_legal_name", previous, eid, locator=f"$.historiskeNavn[{index}]")
+            if isinstance(previous, dict):
+                previous = {"name": previous.get("navn"), "from": str(previous.get("fraDato") or "")[:10] or None, "to": str(previous.get("tilDato") or "")[:10] or None}
+            builder.claim("public_brand", "previous_legal_name", previous, eid, identity=["previous_legal_name", previous.get("name") if isinstance(previous, dict) else previous],
+                          locator=f"$.historiskeNavn[{index}]", effective_date=previous.get("to") if isinstance(previous, dict) else None)
         builder.state("legal_identity", "available")
     else:
         registry = ev.get("registry") or {}
