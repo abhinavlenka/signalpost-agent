@@ -51,7 +51,7 @@ A measured random 100-company batch took about 5 minutes and about 950 requests.
 | 1 | Brønnøysund Enhetsregisteret API: entity, roles, subunits, group structure, role-update log | identity, leadership, workplaces, group links, dated role changes | open API, [NLOD 2.0](https://data.norge.no/nlod/en/2.0) |
 | 1 | Regnskapsregisteret API | latest filed annual accounts | open API, NLOD 2.0 |
 | 1 | NAV arbeidsplassen `pam-stilling-feed` | job postings | public token, [API terms](https://arbeidsplassen.nav.no/vilkar-api) |
-| 2 | Company website listed in the official register, or declared by the employer in a NAV ad | verified website, company-owned social profiles, careers page, dated news, self-description | robots.txt respected; small bounded crawl |
+| 2 | Company website: listed in the official register, declared by the employer in a NAV ad, the company's registry e-mail domain, or a name-derived `.no` domain | verified website, company-owned social profiles, careers page, dated news, self-description | robots.txt respected; small bounded crawl |
 
 **Not used:** search engines, LinkedIn, Meta, Glassdoor, Indeed, Google, or any unofficial scrapers.
 
@@ -62,7 +62,10 @@ Job-ad contact persons, e-mails and phone numbers are never stored. Personal bir
 The organisation number is the anchor throughout:
 
 1. **Registry facts** come from the live registry record for that number.
-2. **Websites.** A site is published only when it passes an exact-entity gate: the org number appears on the site, or the full legal name appears in the homepage identity markup, or the registry-listed domain spells the full legal name. Sites that fail the gate (brand, parent or franchise sites) are marked `ambiguous`. They are labelled as a registry-declared site under *public brand* and nothing is extracted from them.
+2. **Websites.** A registry-listed site is published only when it passes an exact-entity gate: the org number appears anywhere in the site's raw HTML, or the full legal name appears in the homepage identity markup, or the listed domain spells the full legal name.
+   - **Discovered sites.** Sites found from the registry e-mail domain or a name-derived domain face a stricter rule: the org number on the site, or the exact legal name **plus** the registered street address or phone.
+   - **Failed gate.** Registry-listed sites that fail the gate are marked `ambiguous` and labelled as a registry-declared site under *public brand*. Nothing is extracted from them.
+   - **Possible group sites.** A non-`.no` site proven only by name is labelled `possibly_group_or_international`. Only Norway-specific social handles are published from it, and no news.
 3. **Social profiles** are published only when a verified site links them and the handle matches the legal name.
 4. **Jobs** are published only when the NAV ad's `employer.orgnr` is the company or one of its own registered subunits. Name similarity only nominates candidates.
 

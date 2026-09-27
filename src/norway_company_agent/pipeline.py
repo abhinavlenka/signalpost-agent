@@ -189,20 +189,33 @@ def research_website(profile: dict[str, Any], url: str | None, *, discovery: str
     return publishable
 
 
+GENERIC_MAIL_DOMAINS = {
+    "gmail.com", "googlemail.com", "hotmail.com", "hotmail.no", "outlook.com", "outlook.no", "live.com", "live.no", "msn.com",
+    "yahoo.com", "yahoo.no", "icloud.com", "me.com", "mac.com", "online.no", "broadpark.no", "getmail.no", "frisurf.no",
+    "c2i.net", "start.no", "lyse.net", "altibox.no", "mail.com", "protonmail.com", "proton.me", "haugnett.no", "tele2.no",
+    "enivest.net", "ebnett.no", "telia.no", "netcom.no", "bluezone.no", "tussa.com", "nextgentel.com", "ngt.no", "sf-nett.no",
+    "kvinnherad.net", "vikenfiber.no", "neasenett.no", "hotmail.se", "gmx.com", "gmx.net", "aol.com", "tdcadsl.no",
+}
 SKIP_GUESS_FORMS = {"BRL", "ESEK", "BBL", "SAM", "KIRK", "PRE", "VPFO", "ANNA"}
 
 
 def domain_candidates(name: str | None) -> list[str]:
-    tokens = [token for token in raw_tokens(name) if token not in {"og", "and", "the"}]
-    if not tokens or len(tokens) > 4:
-        return []
-    joined = "".join(tokens)
-    if len(tokens) == 1 and len(joined) < 5 or len(joined) > 40:
-        return []
-    candidates = [f"{joined}.no"]
-    if len(tokens) > 1:
-        candidates.append(f"{'-'.join(tokens)}.no")
-    return candidates
+    """Name-derived .no candidates; Norwegian letters get both common spellings (å→aa/a, ø→o/oe, æ→ae)."""
+    spellings = []
+    for table in ({"å": "aa", "ø": "o", "æ": "ae"}, {"å": "a", "ø": "oe", "æ": "ae"}):
+        variant = "".join(table.get(char, char) for char in str(name or "").casefold())
+        tokens = [token for token in raw_tokens(variant) if token not in {"og", "and", "the"}]
+        if tokens and tokens not in spellings:
+            spellings.append(tokens)
+    candidates: list[str] = []
+    for tokens in spellings:
+        joined = "".join(tokens)
+        if len(tokens) > 4 or (len(tokens) == 1 and len(joined) < 5) or len(joined) > 40:
+            continue
+        candidates.append(f"{joined}.no")
+        if len(tokens) > 1:
+            candidates.append(f"{'-'.join(tokens)}.no")
+    return list(dict.fromkeys(candidates))
 
 
 def _resolves(host: str) -> bool:
@@ -215,24 +228,33 @@ def _resolves(host: str) -> bool:
 def discover_by_domain_guess(profile: dict[str, Any]) -> dict[str, Any] | None:
     """Name-derived .no domains, published only with orgnr on site or exact name + registered address/phone."""
     live = ((profile["evidence"].get("registry_live") or {}).get("value")) or {}
-    if str(profile.get("legal_form") or "").upper() in SKIP_GUESS_FORMS or live.get("bankrupt") or live.get("liquidating"):
-        return {"skipped": "legal form or status unlikely to have an own website"}
-    records = (((profile["evidence"].get("financials") or {}).get("value")) or {}).get("records") or []
-    revenue = max([record.get("revenue") or 0 for record in records] or [0])
-    if not (live.get("employees") or 0) >= 1 and revenue < 1_000_000:
-        return {"skipped": "no registered employees and revenue below NOK 1m"}
+    candidates: list[tuple[str, str]] = []
+    email_domain = live.get("_email_domain")
+    if email_domain and email_domain not in GENERIC_MAIL_DOMAINS and "." in email_domain:
+        candidates.append((email_domain, "registry_email_domain"))
+    dormant_form = str(profile.get("legal_form") or "").upper() in SKIP_GUESS_FORMS or live.get("bankrupt") or live.get("liquidating")
+    financials = profile["evidence"].get("financials") or {}
+    records = (financials.get("value") or {}).get("records") or []
+    revenue_known_small = financials.get("status") == "available" and max([record.get("revenue") or 0 for record in records] or [0]) < 1_000_000
+    if not dormant_form and not ((live.get("employees") or 0) < 1 and revenue_known_small):
+        candidates += [(domain, "name_derived_domain") for domain in domain_candidates(profile.get("name")) if domain != email_domain]
+    if not candidates:
+        return {"skipped": "no company-declared domain and entity looks dormant"}
     tried = []
-    for domain in domain_candidates(profile.get("name")):
-        if len(tried) >= 2:
+    fetched = 0
+    for domain, discovery in candidates:
+        if fetched >= 2:
             break
-        if not _resolves(domain):
+        host = next((candidate for candidate in (f"www.{domain}", domain) if _resolves(candidate)), None)
+        if not host:
             tried.append({"domain": domain, "result": "no DNS"})
             continue
-        record, _ = fetch_website("https://" + domain, identity=registry_identity(profile), max_pages=3)
+        fetched += 1
+        record, _ = fetch_website(host, identity=registry_identity(profile), max_pages=3)
         if record.get("status") != "available":
             tried.append({"domain": domain, "result": record.get("note") or record.get("status")})
             continue
-        record["source_type"] = record["source_class"] = "name_derived_domain"
+        record["source_type"] = record["source_class"] = discovery
         gated = apply_website_identity_gate(profile, record)["website"]
         value = gated.get("value") or {}
         assessment = value.get("identity_assessment") or {}
@@ -240,12 +262,12 @@ def discover_by_domain_guess(profile: dict[str, Any]) -> dict[str, Any] | None:
         name_exact = assessment.get("score", 0) >= 0.95 and "legal-name" in " ".join(assessment.get("reasons") or [])
         if "organisation_number" in markers or (name_exact and markers & {"address", "phone"}):
             assessment.update({
-                "status": "exact", "publishable": True, "method": "name_derived_domain_strict_v1",
+                "status": "exact", "publishable": True, "method": f"{discovery}_strict_v1",
                 "score": 1.0 if "organisation_number" in markers else 0.95,
-                "reasons": [*assessment.get("reasons", []), f"name-derived domain verified by registry markers: {sorted(markers)}"],
+                "reasons": [*assessment.get("reasons", []), f"{discovery.replace('_', ' ')} verified by registry markers: {sorted(markers)}"],
             })
             value["social_links"] = [{"platform": item["platform"], "url": item["url"]} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
-            value["discovery_method"] = "name_derived_domain"
+            value["discovery_method"] = discovery
             value["registry_listed"] = False
             profile["evidence"]["website"] = gated
             tried.append({"domain": domain, "result": "verified"})

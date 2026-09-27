@@ -223,6 +223,7 @@ def test_domain_candidates():
     from norway_company_agent.pipeline import domain_candidates
 
     assert domain_candidates("SANDNES ELEKTRISKE AS") == ["sandneselektriske.no", "sandnes-elektriske.no"]
+    assert domain_candidates("MÅLSELV BYGG AS") == ["maalselvbygg.no", "maalselv-bygg.no", "malselvbygg.no", "malselv-bygg.no"]
     assert domain_candidates("BØ AS") == []
     assert domain_candidates("AASEN & FARSTAD AS") == ["aasenfarstad.no", "aasen-farstad.no"]
     assert domain_candidates("A B C D E AS") == []

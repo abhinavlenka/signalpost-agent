@@ -3,8 +3,8 @@
 ## Known gaps
 
 - **Websites.** Only about 11% of the eligible universe lists a website in the official register.
-  - Companies without one get a website only when an exact-orgnr NAV ad declares the employer's homepage.
-  - No search engine is used, so otherwise the website is `not_available`.
+  - Companies without one are covered by three free discovery paths: an employer homepage declared in an exact-orgnr NAV ad, the company's registry e-mail domain, and name-derived `.no` domains. The last two require the org number, or the exact name plus address or phone, on the site.
+  - No search engine is used. Websites under unrelated brand names are therefore missed and stay `not_available`.
   - A search-API connector (e.g. Brave) could raise coverage but needs an evaluator-supplied key. It would be used for candidate generation only.
 - **Jobs.** Only NAV's national job feed is used, covering ads modified in the last 45 days (about 10k active ads).
   - Jobs posted only on LinkedIn, Finn or company career portals are not captured, except as a `careers_page` claim on a verified site.

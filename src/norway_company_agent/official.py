@@ -208,6 +208,7 @@ def normalize_entity(body: Any) -> dict[str, Any]:
         "deleted_date": body.get("slettedato"),
         # verification-only (never published): used to confirm website identity
         "_phones": [phone for phone in (body.get("telefon"), body.get("mobil")) if phone],
+        "_email_domain": str(body.get("epostadresse") or "").rsplit("@", 1)[-1].strip().lower() if "@" in str(body.get("epostadresse") or "") else None,
     }
 
 
