@@ -4,6 +4,7 @@ import json
 import ipaddress
 import re
 import socket
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -17,9 +18,9 @@ import extruct
 import tldextract
 import trafilatura
 
+from .budget import active_budget
 from .evidence import evidence
-
-USER_AGENT = "builderr-signalpost-poc/0.1 (+https://builderr.ai)"
+from .http import USER_AGENT
 SOCIAL_HOSTS = {
     "linkedin.com": "linkedin",
     "facebook.com": "facebook",
@@ -57,10 +58,21 @@ def assert_public_url(url: str) -> None:
 class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
         assert_public_url(newurl)
+        active_budget().take(newurl, purpose="website_redirect")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 SAFE_OPENER = urllib.request.build_opener(SafeRedirectHandler())
+
+
+def _open(request: urllib.request.Request, *, timeout: float, purpose: str = "website") -> Any:
+    """Single choke point for website traffic: charge the batch budget, then open."""
+    active_budget().take(request.full_url, purpose=purpose)
+    return SAFE_OPENER.open(request, timeout=timeout)
+
+
+_robots_cache: dict[str, urllib.robotparser.RobotFileParser | None] = {}
+_robots_lock = threading.Lock()
 
 
 def normalize_homepage(value: str | None) -> str | None:
@@ -84,19 +96,29 @@ def _registered_domain(url: str) -> str:
 def _robots_allowed(url: str, timeout: float) -> bool:
     assert_public_url(url)
     parsed = urllib.parse.urlparse(url)
-    robots_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, "/robots.txt", "", "", ""))
-    parser = urllib.robotparser.RobotFileParser()
-    parser.set_url(robots_url)
-    try:
-        request = urllib.request.Request(robots_url, headers={"User-Agent": USER_AGENT})
-        with SAFE_OPENER.open(request, timeout=timeout) as response:
-            parser.parse(response.read().decode("utf-8", errors="replace").splitlines())
-        return parser.can_fetch(USER_AGENT, url)
-    except Exception:
-        # An unavailable robots file is not permission to ignore explicit site terms; callers retain
-        # the URL and can route uncertain domains to review. For this bounded homepage POC, allow one
-        # ordinary GET when robots.txt is absent rather than crawl deeper.
-        return True
+    key = f"{parsed.scheme}://{parsed.netloc.lower()}"
+    with _robots_lock:
+        cached = key in _robots_cache
+        parser = _robots_cache.get(key)
+    if not cached:
+        robots_url = key + "/robots.txt"
+        parser = urllib.robotparser.RobotFileParser()
+        parser.set_url(robots_url)
+        try:
+            request = urllib.request.Request(robots_url, headers={"User-Agent": USER_AGENT})
+            with _open(request, timeout=timeout, purpose="robots") as response:
+                parser.parse(response.read(500_000).decode("utf-8", errors="replace").splitlines())
+        except urllib.error.HTTPError as exc:
+            # RFC 9309: 4xx means no restrictions; 5xx means assume full disallow.
+            parser = None if 400 <= exc.code < 500 else False  # type: ignore[assignment]
+        except Exception:
+            # Unreachable robots file: allow the bounded, polite crawl rather than guessing a ban.
+            parser = None
+        with _robots_lock:
+            _robots_cache[key] = parser
+    if parser is False:
+        return False
+    return True if parser is None else parser.can_fetch(USER_AGENT, url)
 
 
 def _social_links(base_url: str, soup: BeautifulSoup) -> list[dict[str, str]]:
@@ -212,7 +234,7 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
     started = time.monotonic()
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     try:
-        with SAFE_OPENER.open(request, timeout=timeout) as response:
+        with _open(request, timeout=timeout) as response:
             raw = response.read(max_bytes + 1)
             elapsed = int((time.monotonic() - started) * 1000)
             final_url = response.geturl()
@@ -272,7 +294,7 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
     started = time.monotonic()
     request = urllib.request.Request(normalized, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     try:
-        with SAFE_OPENER.open(request, timeout=timeout) as response:
+        with _open(request, timeout=timeout) as response:
             content_type = response.headers.get("content-type", "")
             raw = response.read(max_bytes + 1)
             elapsed = int((time.monotonic() - started) * 1000)

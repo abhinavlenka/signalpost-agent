@@ -19,6 +19,9 @@ BRREG_SUBUNITS = "https://data.brreg.no/enhetsregisteret/api/underenheter?overor
 BRREG_ACCOUNTS = "https://data.brreg.no/regnskapsregisteret/regnskap/{org}"
 BRREG_ACCOUNT_YEARS = "https://data.brreg.no/regnskapsregisteret/regnskap/aarsregnskap/kopi/{org}/aar"
 BRREG_ACCOUNT_PDF = "https://data.brreg.no/regnskapsregisteret/regnskap/aarsregnskap/kopi/{org}/{year}"
+BRREG_ROLE_EVENTS = "https://data.brreg.no/enhetsregisteret/api/oppdateringer/roller?organisasjonsnummer={org}&afterTime=2000-01-01T00:00:00.000Z&size=200"
+# The accounts service sheds load with bare 503s; give it patient, jittered retries.
+FLAKY_MODULE_RETRIES = {"financials": {"attempts": 6, "backoff": 1.5}, "financial_history": {"attempts": 4, "backoff": 1.5}}
 
 _history_lock = threading.Lock()
 _history_last_request = 0.0
@@ -128,7 +131,10 @@ def normalize_roles(body: Any) -> dict[str, Any]:
             person = item.get("person") or {}
             name = person.get("navn") or {}
             entity = item.get("enhet") or {}
-            display_name = " ".join(filter(None, [name.get("fornavn"), name.get("mellomnavn"), name.get("etternavn")])) or entity.get("navn")
+            entity_name = entity.get("navn")
+            if isinstance(entity_name, list):
+                entity_name = " ".join(str(part) for part in entity_name if part)
+            display_name = " ".join(filter(None, [name.get("fornavn"), name.get("mellomnavn"), name.get("etternavn")])) or entity_name
             roles.append({
                 "name": display_name or None,
                 "organisation_number": entity.get("organisasjonsnummer"),
@@ -159,15 +165,64 @@ def normalize_entity(body: Any) -> dict[str, Any]:
         "organisation_number": body.get("organisasjonsnummer"),
         "name": body.get("navn"),
         "legal_form": _get(body, "organisasjonsform", "kode"),
+        "legal_form_label": _get(body, "organisasjonsform", "beskrivelse"),
         "employees": body.get("antallAnsatte"),
+        "has_registered_employees": body.get("harRegistrertAntallAnsatte"),
         "bankrupt": body.get("konkurs"),
         "liquidating": body.get("underAvvikling"),
+        "forced_dissolution": body.get("underTvangsavviklingEllerTvangsopplosning"),
         "website": body.get("hjemmeside"),
         "industry": body.get("naeringskode1"),
+        "industry_secondary": [code for code in (body.get("naeringskode2"), body.get("naeringskode3")) if code],
         "business_address": body.get("forretningsadresse"),
         "postal_address": body.get("postadresse"),
         "latest_submitted_accounts": body.get("sisteInnsendteAarsregnskap"),
+        "founded_date": body.get("stiftelsesdato"),
+        "registered_date": body.get("registreringsdatoEnhetsregisteret"),
+        "business_register_date": body.get("registreringsdatoForetaksregisteret"),
+        "vat_registered": body.get("registrertIMvaregisteret"),
+        "in_group": body.get("erIKonsern"),
+        "activity": body.get("aktivitet") or [],
+        "statutory_purpose": body.get("vedtektsfestetFormaal") or [],
+        "historical_names": body.get("historiskeNavn") or [],
+        "share_capital": body.get("kapital"),
+        "parent_unit": body.get("overordnetEnhet"),
+        "deleted_date": body.get("slettedato"),
     }
+
+
+def normalize_group(body: Any, org: str) -> dict[str, Any]:
+    """Flatten Brreg's group tree into labelled parent/child links touching this entity."""
+    links: list[dict[str, Any]] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if node.get("organisasjonsnummer") and node.get("parentOrganisasjonsnummer"):
+                child, parent = node["organisasjonsnummer"], node["parentOrganisasjonsnummer"]
+                if org in {child, parent}:
+                    links.append({
+                        "relation": "parent" if child == org else "subsidiary",
+                        "organisation_number": parent if child == org else child,
+                        "name": node.get("parentNavn") if child == org else node.get("navn"),
+                        "ownership_basis": node.get("grunnlag"),
+                        "link_type": _get(node, "knytningsform", "beskrivelse"),
+                        "as_of": node.get("dato"),
+                    })
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(body)
+    unique = {(item["relation"], item["organisation_number"]): item for item in links}
+    return {"links": sorted(unique.values(), key=lambda item: (item["relation"], item["organisation_number"]))[:200]}
+
+
+def normalize_role_events(body: Any) -> dict[str, Any]:
+    rows = body if isinstance(body, list) else []
+    dates = sorted({str(item.get("time") or "")[:10] for item in rows if item.get("time")})
+    return {"role_change_dates": dates}
 
 
 def _classified(field: str, source_type: str, result: FetchResult, value: Any = None) -> dict[str, Any]:
@@ -188,14 +243,30 @@ def fetch_official_modules(org: str, modules: set[str], fetcher: Callable[[str],
         "roles": (BRREG_ROLES.format(org=org), "official_roles"),
         "group": (BRREG_GROUP.format(org=org), "official_group_structure"),
         "locations": (BRREG_SUBUNITS.format(org=org), "official_subunits"),
+        "role_events": (BRREG_ROLE_EVENTS.format(org=org), "official_role_update_log"),
     }
     for module, (url, source_type) in endpoints.items():
         if module not in modules:
             continue
-        result = _fetch_history(url) if module == "financial_history" and fetcher is fetch_json else fetcher(url)
+        if fetcher is fetch_json:
+            options = {"purpose": f"brreg_{module}", **FLAKY_MODULE_RETRIES.get(module, {})}
+            if module == "financial_history":
+                _reserve_history_slot()
+            result = fetch_json(url, **options)
+        else:
+            result = fetcher(url)
         metrics.append(result)
         normalized = None
         if result.status == 200:
-            normalized = normalize_entity(result.body) if module == "registry_live" else normalize_financials(result.body) if module == "financials" else normalize_financial_history(result.body, org) if module == "financial_history" else normalize_roles(result.body) if module == "roles" else normalize_locations(result.body) if module == "locations" else result.body
+            normalizers = {
+                "registry_live": normalize_entity,
+                "financials": normalize_financials,
+                "financial_history": lambda body: normalize_financial_history(body, org),
+                "roles": normalize_roles,
+                "locations": normalize_locations,
+                "group": lambda body: normalize_group(body, org),
+                "role_events": normalize_role_events,
+            }
+            normalized = normalizers[module](result.body) if module in normalizers else result.body
         records[module] = _classified(module, source_type, result, value=normalized)
     return records, metrics
