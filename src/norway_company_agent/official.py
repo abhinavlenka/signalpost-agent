@@ -25,6 +25,11 @@ BRREG_ROLE_EVENTS = "https://data.brreg.no/enhetsregisteret/api/oppdateringer/ro
 # seconds, independent of the organisation. Concurrency makes it worse, so accounts calls go through a
 # narrow lane with short, steady, jittered retries instead of exponential backoff.
 ACCOUNTS_LANE = threading.BoundedSemaphore(2)
+
+
+def set_accounts_lanes(lanes: int) -> None:
+    global ACCOUNTS_LANE
+    ACCOUNTS_LANE = threading.BoundedSemaphore(max(1, lanes))
 ACCOUNTS_ATTEMPTS = 8
 FLAKY_MODULE_RETRIES = {"financial_history": {"attempts": 4, "backoff": 1.5}}
 

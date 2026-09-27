@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -21,16 +22,22 @@ def main() -> None:
     run.add_argument("--previous", help="previous envelopes.jsonl (or its directory); defaults to --state/latest")
     run.add_argument("--universe", default=str(ROOT / "data" / "signalpost-universe.jsonl.gz"))
     run.add_argument("--run-id")
-    run.add_argument("--max-requests", type=int, default=1900)
-    run.add_argument("--deadline-minutes", type=float, default=38.0)
-    run.add_argument("--workers", type=int, default=12)
+    env = os.environ.get
+    run.add_argument("--max-requests", type=int, default=int(env("SIGNALPOST_MAX_REQUESTS", 0)) or None,
+                     help="hard cap on outbound requests (default: 19 per input company; env SIGNALPOST_MAX_REQUESTS)")
+    run.add_argument("--requests-per-company", type=float, default=float(env("SIGNALPOST_REQUESTS_PER_COMPANY", 19)))
+    run.add_argument("--deadline-minutes", type=float, default=float(env("SIGNALPOST_DEADLINE_MINUTES", 40)),
+                     help="stop fetching and write results by this wall-clock budget (env SIGNALPOST_DEADLINE_MINUTES)")
+    run.add_argument("--workers", type=int, default=int(env("SIGNALPOST_WORKERS", 16)))
+    run.add_argument("--accounts-lanes", type=int, default=int(env("SIGNALPOST_ACCOUNTS_LANES", 6)))
     run.add_argument("--nav-days", type=int, default=45)
     run.add_argument("--no-nav", action="store_true", help="skip the NAV job-feed connector")
     args = parser.parse_args()
     report = run_batch(
         args.input, out_dir=args.out, state_dir=args.state, universe_path=args.universe, previous=args.previous,
-        run_id=args.run_id, max_requests=args.max_requests, deadline_minutes=args.deadline_minutes,
-        workers=args.workers, nav_days=args.nav_days, use_nav=not args.no_nav,
+        run_id=args.run_id, max_requests=args.max_requests, requests_per_company=args.requests_per_company,
+        deadline_minutes=args.deadline_minutes, workers=args.workers, accounts_lanes=args.accounts_lanes,
+        nav_days=args.nav_days, use_nav=not args.no_nav,
     )
     sys.exit(0 if all(report["validation"].values()) else 1)
 

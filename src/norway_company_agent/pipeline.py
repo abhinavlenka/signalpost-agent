@@ -9,17 +9,17 @@ import socket
 import threading
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from typing import Any, Callable
 
-from .budget import BudgetExhausted, RequestBudget, set_active_budget
+from .budget import BudgetExhausted, RequestBudget, active_budget, set_active_budget
 from .claim_refresh import apply_refresh
 from .envelope import build_envelope
 from .evidence import evidence, utc_now
 from .identity import apply_website_identity_gate
 from .jobs_nav import NavJobIndex, match_company_jobs, raw_tokens
-from .official import fetch_official_modules
+from .official import fetch_official_modules, set_accounts_lanes
 from .summary import build_summary
 from .website import fetch_website
 
@@ -128,7 +128,11 @@ def base_profile(org: str, row: dict[str, Any] | None, universe_meta: dict[str, 
     return profile
 
 
-def research_official(profile: dict[str, Any]) -> None:
+CORE_MODULES = {"roles", "locations", "role_events"}
+
+
+def research_core(profile: dict[str, Any]) -> None:
+    """Phase 1: registry identity, roles, workplaces, role events and group links (no accounts)."""
     org = profile["organisation_number"]
     records, _ = fetch_official_modules(org, {"registry_live"})
     profile["evidence"].update(records)
@@ -139,11 +143,21 @@ def research_official(profile: dict[str, Any]) -> None:
         profile["legal_form"] = value.get("legal_form") or profile.get("legal_form")
         profile["website"] = value.get("website") or profile.get("website")
         profile["latest_submitted_accounts"] = value.get("latest_submitted_accounts") or profile.get("latest_submitted_accounts")
-    modules = set(OFFICIAL_MODULES) - {"registry_live"}
+    modules = set(CORE_MODULES)
     if value.get("in_group"):
         modules.add("group")
     records, _ = fetch_official_modules(org, modules)
     profile["evidence"].update(records)
+
+
+def research_accounts(profile: dict[str, Any]) -> None:
+    records, _ = fetch_official_modules(profile["organisation_number"], {"financials"})
+    profile["evidence"].update(records)
+
+
+def research_official(profile: dict[str, Any]) -> None:
+    research_core(profile)
+    research_accounts(profile)
 
 
 def registry_identity(profile: dict[str, Any]) -> dict[str, Any]:
@@ -199,23 +213,53 @@ GENERIC_MAIL_DOMAINS = {
 SKIP_GUESS_FORMS = {"BRL", "ESEK", "BBL", "SAM", "KIRK", "PRE", "VPFO", "ANNA"}
 
 
+ENTITY_PREFIXES = {"stiftelsen", "sameiet", "borettslag", "foreningen", "the"}
+
+
+def _merge_initials(tokens: list[str]) -> list[str]:
+    """Merge runs of single-letter initials: ["p", "e", "gaarud"] → ["pe", "gaarud"]."""
+    merged: list[str] = []
+    in_run = False
+    for token in tokens:
+        if len(token) == 1 and token.isalpha():
+            if in_run:
+                merged[-1] += token
+            else:
+                merged.append(token)
+            in_run = True
+        else:
+            merged.append(token)
+            in_run = False
+    return merged
+
+
 def domain_candidates(name: str | None) -> list[str]:
-    """Name-derived .no candidates; Norwegian letters get both common spellings (å→aa/a, ø→o/oe, æ→ae)."""
-    spellings = []
+    """Name-derived domain candidates (DNS-checked before any HTTP request).
+
+    Norwegian letters get both common spellings (å→aa/a, ø→o/oe, æ→ae); single-letter initials are
+    merged ("P.E. GAARUD" → pe-gaarud); entity prefixes (stiftelsen, sameiet, the ...) are also tried
+    without; .com is tried after .no; dropping a trailing (often geographic) token comes last.
+    """
+    spellings: list[list[str]] = []
     for table in ({"å": "aa", "ø": "o", "æ": "ae"}, {"å": "a", "ø": "oe", "æ": "ae"}):
         variant = "".join(table.get(char, char) for char in str(name or "").casefold())
-        tokens = [token for token in raw_tokens(variant) if token not in {"og", "and", "the"}]
-        if tokens and tokens not in spellings:
-            spellings.append(tokens)
-    candidates: list[str] = []
+        tokens = _merge_initials([token for token in raw_tokens(variant) if token not in {"og", "and"}])
+        for option in (tokens, [token for token in tokens if token not in ENTITY_PREFIXES]):
+            if option and option not in spellings:
+                spellings.append(option)
+    primary: list[str] = []
+    secondary: list[str] = []
     for tokens in spellings:
         joined = "".join(tokens)
         if len(tokens) > 4 or (len(tokens) == 1 and len(joined) < 5) or len(joined) > 40:
             continue
-        candidates.append(f"{joined}.no")
+        primary.append(f"{joined}.no")
         if len(tokens) > 1:
-            candidates.append(f"{'-'.join(tokens)}.no")
-    return list(dict.fromkeys(candidates))
+            primary.append(f"{'-'.join(tokens)}.no")
+        secondary.append(f"{joined}.com")
+        if len(tokens) >= 2 and len(tokens[0]) >= 5 and tokens[0] not in ENTITY_PREFIXES:
+            secondary.append(f"{''.join(tokens[:-1])}.no")
+    return list(dict.fromkeys(primary + secondary))
 
 
 def _resolves(host: str) -> bool:
@@ -225,78 +269,175 @@ def _resolves(host: str) -> bool:
         return False
 
 
+_DNS_POOL = ThreadPoolExecutor(max_workers=64, thread_name_prefix="dns")
+
+
+def resolve_many(hosts: list[str], timeout: float = 4.0) -> set[str]:
+    """Resolve candidate hosts in parallel; slow or failed lookups count as unresolved."""
+    futures = {host: _DNS_POOL.submit(_resolves, host) for host in dict.fromkeys(hosts)}
+    done, _ = wait(list(futures.values()), timeout=timeout)
+    return {host for host, future in futures.items() if future in done and future.result()}
+
+
 def discover_by_domain_guess(profile: dict[str, Any]) -> dict[str, Any] | None:
-    """Name-derived .no domains, published only with orgnr on site or exact name + registered address/phone."""
+    """Website discovery from the registry e-mail domain and name-derived domains.
+
+    - registry e-mail domain: company-declared to the official register, so it faces the same identity
+      gate as a registry-listed website;
+    - name-derived domains: published only with the org number on the site, or the exact legal name
+      plus the registered street address or phone.
+    Stage 1 fetches only the homepage; the bounded crawl runs only for promising candidates.
+    """
     live = ((profile["evidence"].get("registry_live") or {}).get("value")) or {}
+    if str(profile.get("legal_form") or "").upper() in SKIP_GUESS_FORMS or live.get("bankrupt") or live.get("liquidating"):
+        return {"skipped": "legal form or status unlikely to have an own website"}
+    if active_budget().remaining < 300:
+        return {"skipped": "request budget reserved for mandatory sources"}
     candidates: list[tuple[str, str]] = []
     email_domain = live.get("_email_domain")
     if email_domain and email_domain not in GENERIC_MAIL_DOMAINS and "." in email_domain:
         candidates.append((email_domain, "registry_email_domain"))
-    dormant_form = str(profile.get("legal_form") or "").upper() in SKIP_GUESS_FORMS or live.get("bankrupt") or live.get("liquidating")
-    financials = profile["evidence"].get("financials") or {}
-    records = (financials.get("value") or {}).get("records") or []
-    revenue_known_small = financials.get("status") == "available" and max([record.get("revenue") or 0 for record in records] or [0]) < 1_000_000
-    if not dormant_form and not ((live.get("employees") or 0) < 1 and revenue_known_small):
-        candidates += [(domain, "name_derived_domain") for domain in domain_candidates(profile.get("name")) if domain != email_domain]
-    if not candidates:
-        return {"skipped": "no company-declared domain and entity looks dormant"}
-    tried = []
-    fetched = 0
+    candidates += [(domain, "name_derived_domain") for domain in domain_candidates(profile.get("name")) if domain != email_domain]
+    identity = registry_identity(profile)
+    tried: list[dict[str, Any]] = []
+    probes = crawls = 0
+    resolved = resolve_many([host for domain, _ in candidates for host in (f"www.{domain}", domain)])
     for domain, discovery in candidates:
-        if fetched >= 2:
+        if probes >= 4 or crawls >= 2:
             break
-        host = next((candidate for candidate in (f"www.{domain}", domain) if _resolves(candidate)), None)
-        if not host:
+        hosts = [host for host in (f"www.{domain}", domain) if host in resolved]
+        if not hosts:
             tried.append({"domain": domain, "result": "no DNS"})
             continue
-        fetched += 1
-        record, _ = fetch_website(host, identity=registry_identity(profile), max_pages=3)
-        if record.get("status") != "available":
-            tried.append({"domain": domain, "result": record.get("note") or record.get("status")})
+        record = None
+        for host in hosts:  # a broken www certificate should not hide a working bare domain
+            probes += 1
+            record, _ = fetch_website(host, identity=identity, max_pages=0)
+            if record.get("status") == "available":
+                break
+        if not record or record.get("status") != "available":
+            tried.append({"domain": domain, "result": (record or {}).get("note") or (record or {}).get("status")})
             continue
+        record["value"]["registry_listed"] = discovery == "registry_email_domain"
+        probe = apply_website_identity_gate(profile, record)["website"]
+        probe_value = probe.get("value") or {}
+        probe_markers = {marker for items in (probe_value.get("identity_markers") or {}).values() for marker in items}
+        if "organisation_number" not in probe_markers and (probe_value.get("identity_assessment") or {}).get("score", 0) < 0.85:
+            tried.append({"domain": domain, "result": "homepage does not name the company"})
+            continue
+        crawls += 1
+        record, _ = fetch_website(probe_value.get("final_url") or host, identity=identity, max_pages=3)
+        if record.get("status") != "available":
+            record = probe
         record["source_type"] = record["source_class"] = discovery
+        record["value"]["registry_listed"] = discovery == "registry_email_domain"
         gated = apply_website_identity_gate(profile, record)["website"]
         value = gated.get("value") or {}
         assessment = value.get("identity_assessment") or {}
         markers = {marker for items in (value.get("identity_markers") or {}).values() for marker in items}
         name_exact = assessment.get("score", 0) >= 0.95 and "legal-name" in " ".join(assessment.get("reasons") or [])
         if "organisation_number" in markers or (name_exact and markers & {"address", "phone"}):
-            assessment.update({
-                "status": "exact", "publishable": True, "method": f"{discovery}_strict_v1",
-                "score": 1.0 if "organisation_number" in markers else 0.95,
-                "reasons": [*assessment.get("reasons", []), f"{discovery.replace('_', ' ')} verified by registry markers: {sorted(markers)}"],
-            })
-            value["social_links"] = [{"platform": item["platform"], "url": item["url"]} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
-            value["discovery_method"] = discovery
-            value["registry_listed"] = False
-            profile["evidence"]["website"] = gated
-            tried.append({"domain": domain, "result": "verified"})
-            return {"tried": tried}
-        tried.append({"domain": domain, "result": "identity not verified", "markers": sorted(markers)})
+            verdict = f"verified by registry markers: {sorted(markers)}"
+            score = 1.0 if "organisation_number" in markers else 0.95
+        elif discovery == "registry_email_domain" and assessment.get("publishable"):
+            verdict = "company-declared e-mail domain in the official register, and the site passes the exact-entity gate"
+            score = min(0.93, float(assessment.get("score") or 0.93))
+        else:
+            tried.append({"domain": domain, "result": "identity not verified", "markers": sorted(markers)})
+            continue
+        assessment.update({
+            "status": "exact", "publishable": True, "method": f"{discovery}_v2", "score": score,
+            "reasons": [*assessment.get("reasons", []), f"{discovery.replace('_', ' ')} {verdict}"],
+        })
+        value["social_links"] = [{"platform": item["platform"], "url": item["url"]} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
+        value["discovery_method"] = discovery
+        profile["evidence"]["website"] = gated
+        tried.append({"domain": domain, "result": "verified"})
+        return {"tried": tried}
     return {"tried": tried}
 
 
+def research_registry_website(profile: dict[str, Any]) -> None:
+    """Phase 3: the registry-listed website through the exact-entity gate."""
+    if profile.get("website"):
+        research_website(profile, profile["website"], discovery="registry_listed")
+    else:
+        profile["evidence"]["website"] = evidence(
+            "website", "not_found", "registry_linked_company_website",
+            f"https://data.brreg.no/enhetsregisteret/api/enheter/{profile['organisation_number']}",
+            note="registry lists no website",
+        )
+
+
+def research_discovery(profile: dict[str, Any]) -> None:
+    """Phase 4: e-mail-domain and name-derived website discovery for companies without a verified site."""
+    website = profile["evidence"].get("website") or {}
+    if not ((website.get("value") or {}).get("identity_assessment") or {}).get("publishable"):
+        profile["domain_guess"] = discover_by_domain_guess(profile)
+
+
 def research_company(profile: dict[str, Any]) -> dict[str, Any]:
+    """All phases for one company (used by tests and ad-hoc runs; batches use run_phase)."""
+    for step in (research_core, research_accounts, research_registry_website, research_discovery):
+        _guarded(step, profile)
+    return profile
+
+
+def _guarded(step: Callable[[dict[str, Any]], None], profile: dict[str, Any]) -> None:
     started = time.monotonic()
     try:
-        research_official(profile)
-        if profile.get("website"):
-            research_website(profile, profile["website"], discovery="registry_listed")
-        else:
-            profile["evidence"]["website"] = evidence(
-                "website", "not_found", "registry_linked_company_website",
-                f"https://data.brreg.no/enhetsregisteret/api/enheter/{profile['organisation_number']}",
-                note="registry lists no website",
-            )
-        website = profile["evidence"].get("website") or {}
-        if not ((website.get("value") or {}).get("identity_assessment") or {}).get("publishable"):
-            profile["domain_guess"] = discover_by_domain_guess(profile)
+        step(profile)
     except BudgetExhausted as exc:
-        profile["errors"].append({"source": "pipeline", "error": f"budget_exhausted: {exc}"})
+        profile["errors"].append({"source": step.__name__, "error": f"budget_exhausted: {exc}"})
     except Exception as exc:
-        profile["errors"].append({"source": "pipeline", "error": f"{type(exc).__name__}: {exc}", "trace": traceback.format_exc(limit=3)})
-    profile["runtime_ms"] = int((time.monotonic() - started) * 1000)
-    return profile
+        profile["errors"].append({"source": step.__name__, "error": f"{type(exc).__name__}: {exc}", "trace": traceback.format_exc(limit=3)})
+    profile["runtime_ms"] = int(profile.get("runtime_ms") or 0) + int((time.monotonic() - started) * 1000)
+
+
+def run_phase(
+    name: str,
+    step: Callable[[dict[str, Any]], None],
+    profiles: list[dict[str, Any]],
+    budget: RequestBudget,
+    *,
+    workers: int,
+    stop_when_seconds_left: float,
+    on_skip: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Run one phase over many companies; stop starting new work when the deadline approaches."""
+    started, start_requests = time.monotonic(), budget.used
+    done = skipped = 0
+    lock = threading.Lock()
+
+    def task(profile: dict[str, Any]) -> None:
+        nonlocal done, skipped
+        left = budget.time_left()
+        if (left is not None and left < stop_when_seconds_left) or budget.remaining <= 0:
+            if on_skip:
+                on_skip(profile)
+            with lock:
+                skipped += 1
+            return
+        _guarded(step, profile)
+        with lock:
+            done += 1
+            if done % 200 == 0:
+                log(f"  {name}: {done}/{len(profiles)} companies, {budget.used} requests")
+
+    if profiles:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(task, profiles))
+    summary = {"companies": len(profiles), "done": done, "skipped_for_deadline_or_budget": skipped,
+               "seconds": round(time.monotonic() - started, 1), "requests": budget.used - start_requests}
+    log(f"phase {name}: {summary}")
+    return summary
+
+
+def _deadline_evidence(field: str, source_type: str, url: str) -> Callable[[dict[str, Any]], None]:
+    def mark(profile: dict[str, Any]) -> None:
+        profile["evidence"].setdefault(field, evidence(field, "source_error", source_type, url.format(org=profile["organisation_number"]),
+                                                       note="budget_exhausted: run deadline or request budget reached before this source was checked"))
+    return mark
 
 
 def retry_failed_accounts(profiles: dict[str, dict[str, Any]], budget: RequestBudget, *, max_seconds: float, max_requests: int) -> dict[str, Any]:
@@ -376,9 +517,11 @@ def run_batch(
     universe_path: str = "data/signalpost-universe.jsonl.gz",
     previous: str | None = None,
     run_id: str | None = None,
-    max_requests: int = 1900,
-    deadline_minutes: float = 38.0,
-    workers: int = 12,
+    max_requests: int | None = None,
+    requests_per_company: float = 19.0,
+    deadline_minutes: float = 40.0,
+    workers: int = 16,
+    accounts_lanes: int = 6,
     nav_days: int = 45,
     use_nav: bool = True,
 ) -> dict[str, Any]:
@@ -387,12 +530,17 @@ def run_batch(
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     state = Path(state_dir)
-    budget = set_active_budget(RequestBudget(max_requests=max_requests, deadline_seconds=deadline_minutes * 60, reserve=40))
     orgs, invalid = read_input_orgs(input_path)
+    if max_requests is None:
+        # Scale the request budget with the batch (old contract: 2,000 per 100 companies), with margin.
+        max_requests = max(200, int(requests_per_company * max(1, len(orgs))))
+    set_accounts_lanes(accounts_lanes)
+    budget = set_active_budget(RequestBudget(max_requests=max_requests, deadline_seconds=deadline_minutes * 60, reserve=40))
+    report_limits = {"max_requests": max_requests, "deadline_minutes": deadline_minutes, "workers": workers, "accounts_lanes": accounts_lanes}
     log(f"{run_id}: {len(orgs)} organisation numbers ({len(invalid)} invalid rows)")
     profiles: dict[str, dict[str, Any]] = {}
     previous_envelopes: dict[str, dict[str, Any]] = {}
-    report: dict[str, Any] = {"run_id": run_id, "agent_version": AGENT_VERSION, "started_at": started_at, "input": str(input_path), "invalid_inputs": invalid}
+    report: dict[str, Any] = {"run_id": run_id, "agent_version": AGENT_VERSION, "started_at": started_at, "input": str(input_path), "invalid_inputs": invalid, "limits": report_limits}
     try:
         universe_rows, universe_meta = load_universe_rows(Path(universe_path), orgs)
         report["universe"] = universe_meta
@@ -401,24 +549,39 @@ def run_batch(
         profiles = {org: base_profile(org, universe_rows.get(org), universe_meta) for org in orgs}
 
         nav = NavJobIndex(since_days=nav_days).start() if use_nav else None
-        log("researching official registers and registry-listed websites")
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(research_company, profiles[org]): org for org in orgs}
-            for done, future in enumerate(as_completed(futures), 1):
-                future.result()
-                if done % 20 == 0 or done == len(orgs):
-                    log(f"  {done}/{len(orgs)} companies, {budget.used} requests")
+        ordered = [profiles[org] for org in orgs]
+        report["phases"] = {}
 
-        sweep_seconds = min(600.0, max(0.0, (budget.time_left() or 600) - 600))
-        report["accounts_retry"] = retry_failed_accounts(profiles, budget, max_seconds=sweep_seconds, max_requests=max(0, budget.remaining - 500))
+        # Accounts run concurrently from the start: the accounts API is the slowest, flakiest source.
+        accounts_result: dict[str, Any] = {}
+        accounts_thread = threading.Thread(target=lambda: accounts_result.update(run_phase(
+            "accounts", research_accounts, ordered, budget, workers=max(2, accounts_lanes * 2), stop_when_seconds_left=240,
+            on_skip=_deadline_evidence("financials", "official_annual_accounts", "https://data.brreg.no/regnskapsregisteret/regnskap/{org}"))),
+            name="accounts", daemon=True)
+        accounts_thread.start()
+
+        report["phases"]["core_registry"] = run_phase(
+            "core_registry", research_core, ordered, budget, workers=workers, stop_when_seconds_left=120,
+            on_skip=_deadline_evidence("registry_live", "official_registry_live", "https://data.brreg.no/enhetsregisteret/api/enheter/{org}"))
+        report["phases"]["registry_websites"] = run_phase(
+            "registry_websites", research_registry_website, ordered, budget, workers=workers, stop_when_seconds_left=480,
+            on_skip=_deadline_evidence("website", "registry_linked_company_website", "https://data.brreg.no/enhetsregisteret/api/enheter/{org}"))
+        report["phases"]["website_discovery"] = run_phase(
+            "website_discovery", research_discovery, [profile for profile in ordered if profile.get("legal_form") not in SKIP_GUESS_FORMS],
+            budget, workers=workers * 2, stop_when_seconds_left=420)
+
+        accounts_thread.join(timeout=max(1.0, (budget.time_left() or 600) - 200))
+        report["phases"]["accounts"] = dict(accounts_result)
+        sweep_seconds = min(600.0, max(0.0, (budget.time_left() or 600) - 300))
+        report["accounts_retry"] = retry_failed_accounts(profiles, budget, max_seconds=sweep_seconds, max_requests=max(0, budget.remaining - 200))
         log(f"accounts retry sweep: {report['accounts_retry']}")
 
         if nav:
-            remaining = max(5.0, (budget.time_left() or 600) - 240)
+            remaining = max(5.0, (budget.time_left() or 600) - 150)
             log(f"waiting for NAV job feed (up to {remaining:.0f}s)")
             if not nav.wait(remaining):
                 nav.stop()
-                nav.wait(60)
+                nav.wait(30)
             report["nav"] = nav.report()
             log(f"NAV feed: {report['nav']['pages']} pages, {report['nav']['active_ads']} active ads, error={report['nav']['error']}")
             name_index = nav.build_name_index()

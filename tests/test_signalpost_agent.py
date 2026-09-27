@@ -222,11 +222,15 @@ def test_identity_markers_find_orgnr_phone_address_in_footer():
 def test_domain_candidates():
     from norway_company_agent.pipeline import domain_candidates
 
-    assert domain_candidates("SANDNES ELEKTRISKE AS") == ["sandneselektriske.no", "sandnes-elektriske.no"]
-    assert domain_candidates("MÅLSELV BYGG AS") == ["maalselvbygg.no", "maalselv-bygg.no", "malselvbygg.no", "malselv-bygg.no"]
+    assert domain_candidates("SANDNES ELEKTRISKE AS")[:2] == ["sandneselektriske.no", "sandnes-elektriske.no"]
+    assert "maalselvbygg.no" in domain_candidates("MÅLSELV BYGG AS") and "malselvbygg.no" in domain_candidates("MÅLSELV BYGG AS")
     assert domain_candidates("BØ AS") == []
-    assert domain_candidates("AASEN & FARSTAD AS") == ["aasenfarstad.no", "aasen-farstad.no"]
-    assert domain_candidates("A B C D E AS") == []
+    assert domain_candidates("AASEN & FARSTAD AS")[:2] == ["aasenfarstad.no", "aasen-farstad.no"]
+    assert "pe-gaarud.no" in domain_candidates("P.E. GAARUD AS")
+    assert "themiceguru.com" in domain_candidates("THE MICE GURU AS")
+    assert "hammaren.no" in domain_candidates("STIFTELSEN HAMMAREN")
+    assert "netsolution.no" in domain_candidates("NETSOLUTION VIKEN AS")
+    assert domain_candidates("A B C D E AS") == ["abcde.no", "abcde.com"]
 
 
 def test_group_site_profiles_require_norway_handle():

@@ -27,22 +27,28 @@ Run the same command again and it refreshes: every envelope is diffed against `s
 
 The frozen company universe (`data/signalpost-universe.jsonl.gz`, SHA-256 `1c89710e…0384`) is used as a fallback identity anchor. If the file is absent, the agent still runs from the live registry.
 
-Useful flags:
-- `--out`, `--state` choose the output and state directories.
-- `--max-requests` defaults to 1900, below the 2,000 cap.
-- `--deadline-minutes` defaults to 38, below the 45-minute limit.
-- `--workers` defaults to 12.
-- `--nav-days` defaults to 45.
-- `--no-nav` skips the jobs connector.
+Limits are set by flags or environment variables, so the evaluator can match its budget without code changes:
+
+| Flag | Env var | Default |
+|---|---|---|
+| `--max-requests` | `SIGNALPOST_MAX_REQUESTS` | 19 × number of input companies |
+| `--deadline-minutes` | `SIGNALPOST_DEADLINE_MINUTES` | 40 |
+| `--workers` | `SIGNALPOST_WORKERS` | 16 |
+| `--accounts-lanes` | `SIGNALPOST_ACCOUNTS_LANES` | 6 |
+
+Other flags: `--out`, `--state`, `--previous`, `--nav-days` (45), `--no-nav`.
 
 ## Budget guarantees
 
-- **Requests.** Every outbound HTTP attempt goes through one thread-safe governor (`budget.py`) before it is sent, including redirects, retries and robots.txt. The hard cap defaults to 1,900. Once the cap is reached, sources return `failed` with reason `budget` instead of fetching.
-- **Time.** Fetching stops at the deadline, and envelopes are always written.
+- **Priority order.** Work runs in phases, so a tight budget cuts optional enrichment first, never the basics:
+  1. core registry facts for **every** company (accounts run concurrently from the start)
+  2. registry-listed websites
+  3. website discovery
+  4. NAV job matching
+  Each phase stops starting new companies as the deadline approaches. Companies it didn't reach get an explicit `failed` state with the reason.
+- **Requests.** Every outbound HTTP attempt goes through one thread-safe governor (`budget.py`) before it is sent, including redirects, retries and robots.txt.
 - **Envelopes.** Exactly one per input. A crash in one company, one section or the whole pipeline produces `failed` envelopes, never missing rows. Invalid input rows also get a `failed` row.
 - **Cost.** $0 third-party API spend. All sources are free and public, and no API keys are needed.
-
-A measured random 100-company batch took about 5 minutes and about 950 requests.
 
 ## Sources (source ladder)
 
