@@ -226,3 +226,17 @@ def test_domain_candidates():
     assert domain_candidates("BØ AS") == []
     assert domain_candidates("AASEN & FARSTAD AS") == ["aasenfarstad.no", "aasen-farstad.no"]
     assert domain_candidates("A B C D E AS") == []
+
+
+def test_group_site_profiles_require_norway_handle():
+    p = profile()
+    p["evidence"]["website"] = evidence("website", "available", "registry_linked_company_website", "https://bestseller.com/", value={
+        "final_url": "https://bestseller.com/", "requested_url": "https://bestseller.com/", "content_sha256": "f" * 64, "identity_markers": {},
+        "identity_assessment": {"publishable": True, "score": 0.95, "reasons": ["name"], "method": "m"},
+        "social_links": [{"platform": "linkedin", "url": "https://linkedin.com/company/bestseller"},
+                         {"platform": "linkedin", "url": "https://linkedin.com/company/bestseller-norge"}]})
+    envelope = build_envelope(p, run=RUN)
+    profiles = [c["value"] for c in envelope["claims"] if c["family"] == "company_profiles"]
+    assert profiles == ["https://linkedin.com/company/bestseller-norge"]
+    scope = [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"]
+    assert scope == ["possibly_group_or_international"]

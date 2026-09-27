@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import urllib.parse
 from typing import Any, Iterable
 
 STATES = ("available", "not_available", "blocked", "not_applicable", "ambiguous", "failed")
@@ -359,8 +361,13 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
             extraction_method=assessment.get("method") or "identity_gate",
             note="; ".join(assessment.get("reasons") or []),
         )
+        scope = website_scope(value)
+        span = "; ".join(assessment.get("reasons") or [])
+        if scope == "possibly_group_or_international":
+            span += "; site scope: possibly a group or international site (no organisation number on site, non-.no domain)"
         builder.claim("official_website", "official_website", value.get("final_url"), eid, identity="official_website",
-                      span="; ".join(assessment.get("reasons") or []), confidence=float(assessment.get("score") or 0.9))
+                      span=span, confidence=float(assessment.get("score") or 0.9) if scope != "possibly_group_or_international" else 0.8)
+        builder.claim("public_brand", "website_scope", scope, eid, identity="website_scope", locator="identity_markers")
         brand = value.get("site_name") or value.get("title")
         if brand:
             builder.claim("public_brand", "website_brand_title", brand[:200], eid, identity="website_brand_title", locator="html>head>title")
@@ -368,15 +375,18 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
             builder.claim("public_brand", "self_description", value["description"][:600], eid, identity="self_description", locator='meta[name="description"]')
         builder.state("official_website", "available", None, discovery=value.get("discovery_method") or "registry_listed")
         social = value.get("social_links") or []
+        if scope == "possibly_group_or_international":
+            social = [link for link in social if NORWAY_HANDLE.search(link["url"].rsplit("/", 1)[-1])]
         for link in social:
             builder.claim("company_profiles", link["platform"], link["url"], eid, identity=[link["platform"], link["url"]], locator="a[href]",
                           span="profile linked from the verified company website")
         if not social:
             builder.state("company_profiles", "not_available", "verified website links no company-owned social profiles")
-        for page in value.get("careers_pages") or []:
+        group_site = scope == "possibly_group_or_international"
+        for page in [] if group_site else value.get("careers_pages") or []:
             builder.claim("jobs", "careers_page", page, eid, identity=["careers_page", page], locator="a[href]",
                           span="careers page on the verified company website")
-        for item in value.get("news_items") or []:
+        for item in [] if group_site else value.get("news_items") or []:
             builder.claim("dated_activity", "website_news", {"date": item.get("date"), "title": item.get("title"), "url": item.get("url")},
                           eid, identity=["website_news", item.get("url")], effective_date=item.get("date"), locator=item.get("locator"))
     elif state == "available":
@@ -397,6 +407,19 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
             reason = reason or "no registry-listed website and no verified candidate"
         builder.state("official_website", state, reason)
         builder.state("company_profiles", "not_available" if state == "not_available" else state, "no verified website to anchor company-owned profiles")
+
+
+NORWAY_HANDLE = re.compile(r"(norge|norway|norsk|[-_.]no$|[-_.]no[-_.])", re.I)
+
+
+def website_scope(value: dict[str, Any]) -> str:
+    markers = {marker for items in (value.get("identity_markers") or {}).values() for marker in items}
+    if "organisation_number" in markers:
+        return "exact_entity_verified_by_organisation_number"
+    host = urllib.parse.urlparse(value.get("final_url") or "").hostname or ""
+    if host.endswith(".no"):
+        return "norwegian_domain"
+    return "possibly_group_or_international"
 
 
 def build_activity(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
