@@ -44,7 +44,7 @@ th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: v
 tbody tr { cursor: pointer; } tbody tr:hover { background: var(--accent-soft); }
 td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .name { font-weight: 600; } .sub { color: var(--muted); font-size: 12.5px; }
-.dots { display: flex; gap: 3px; flex-wrap: wrap; }
+.dots { display: flex; gap: 3px; flex-wrap: nowrap; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--na-soft); border: 1px solid var(--line); }
 .dot.available { background: var(--ok); border-color: var(--ok); } .dot.failed, .dot.blocked { background: var(--bad); border-color: var(--bad); } .dot.ambiguous { background: var(--warn); border-color: var(--warn); }
 .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--na-soft); color: var(--na); white-space: nowrap; }
@@ -71,19 +71,30 @@ h2 { font-size: 15px; margin: 0 0 10px; }
 .empty { padding: 32px; text-align: center; color: var(--muted); }
 .compare-bar { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); border-radius: 999px; padding: 8px 8px 8px 16px; display: none; gap: 10px; align-items: center; box-shadow: var(--shadow); z-index: 6; }
 .compare-bar button { border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; cursor: pointer; background: var(--accent); color: #fff; }
-.theme { margin-left: auto; }
+.theme { order: 5; }
 .stale { opacity: .65; }
 @media (max-width: 820px) {
   .grid { grid-template-columns: 1fr; }
   table.list thead { display: none; }
-  table.list tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
-  table.list td { border: 0; padding: 0; }
+  table.list, table.list tbody { display: block; }
+  table.list tr { display: grid; grid-template-columns: 26px 1fr 1fr; gap: 4px 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  table.list td { border: 0; padding: 0; min-width: 0; }
+  table.list td.nm { grid-column: 2 / 4; }
+  table.list td.dt { grid-column: 2 / 4; }
+  table.list td[data-l="Revenue"] { grid-column: 2; }
+  table.list td[data-l="Result"] { grid-column: 3; }
+  table.list td.num::before { content: attr(data-l) " "; color: var(--muted); font-size: 12px; }
   table.list td.hide-m { display: none; }
   table.list td.num { text-align: left; }
   .claims td.field { width: auto; display: block; padding-bottom: 0; border: 0; }
   .claims tr { display: block; border-bottom: 1px solid var(--line); }
   .claims td { display: block; }
-  .theme { margin-left: 0; }
+  .bar { gap: 8px; }
+  .brand { flex: 1 1 auto; }
+  .theme { margin-left: 0; order: 2; }
+  input[type=search] { order: 3; flex-basis: 100%; }
+  .chips { order: 4; flex-wrap: nowrap; overflow-x: auto; width: 100%; padding-bottom: 2px; }
+  .chip { white-space: nowrap; }
 }
 </style>
 </head>
@@ -92,13 +103,13 @@ h2 { font-size: 15px; margin: 0 0 10px; }
   <div class="bar">
     <div class="brand">Signalpost <span>explorer</span></div>
     <input id="q" type="search" placeholder="Search name, org number, municipality, industry…" aria-label="Search companies">
+    <button class="chip theme" id="theme" aria-label="Toggle colour theme">◐</button>
     <div class="chips" role="group" aria-label="Filters">
       <button class="chip" data-f="w" aria-pressed="false">Verified website</button>
       <button class="chip" data-f="j" aria-pressed="false">Hiring</button>
       <button class="chip" data-f="r" aria-pressed="false">Has accounts</button>
       <button class="chip" data-f="c" aria-pressed="false">Changed</button>
     </div>
-    <button class="chip theme" id="theme" aria-label="Toggle colour theme">◐</button>
   </div>
 </header>
 <main id="app"><div class="empty">Loading…</div></main>
@@ -134,10 +145,10 @@ function renderList() {
   $("#app").innerHTML = `<p class="meta"><span>${list.length} of ${rows.length} companies${list.length > 300 ? " (showing 300 — refine search)" : ""}</span><span>Coverage dots: ${Object.values(FAMILIES).join(" · ")}</span></p>
   <div class="card"><table class="list"><thead><tr><th></th><th>Company</th><th class="hide-m">Industry</th><th class="num">Revenue</th><th class="num">Result</th><th class="num hide-m">Employees</th><th class="hide-m">Signals</th><th>Coverage</th></tr></thead><tbody>
   ${shown.map(r => `<tr data-o="${esc(r.o)}"><td><input type="checkbox" class="cmp" aria-label="Select ${esc(r.n)} to compare" data-o="${esc(r.o)}" ${selected.has(r.o) ? "checked" : ""}></td>
-    <td><div class="name">${esc(r.n)}</div><div class="sub">${esc(r.o)} · ${esc(r.f||"")} · ${esc(r.m||"")}</div></td>
-    <td class="hide-m sub">${esc(r.i||"—")}</td><td class="num">${nok(r.r)}</td><td class="num">${nok(r.p)}</td><td class="num hide-m">${r.e ?? "—"}</td>
+    <td class="nm"><div class="name">${esc(r.n)}</div><div class="sub">${esc(r.o)} · ${esc(r.f||"")} · ${esc(r.m||"")}</div></td>
+    <td class="hide-m sub">${esc(r.i||"—")}</td><td class="num" data-l="Revenue">${nok(r.r)}</td><td class="num" data-l="Result">${nok(r.p)}</td><td class="num hide-m">${r.e ?? "—"}</td>
     <td class="hide-m">${r.w ? '<span class="badge available">web</span> ' : ""}${r.j ? `<span class="badge available">${r.j} job${r.j>1?"s":""}</span> ` : ""}${r.c ? `<span class="badge ambiguous">${r.c} change${r.c>1?"s":""}</span>` : ""}</td>
-    <td>${dots(r.a)}</td></tr>`).join("")}
+    <td class="dt">${dots(r.a)}</td></tr>`).join("")}
   </tbody></table>${list.length ? "" : '<div class="empty">No companies match.</div>'}</div>`;
   $("#app").querySelectorAll("tbody tr").forEach(tr => tr.onclick = e => { if (e.target.classList.contains("cmp")) return; location.hash = `#/c/${tr.dataset.o}`; });
   $("#app").querySelectorAll(".cmp").forEach(cb => cb.onchange = () => { cb.checked ? selected.add(cb.dataset.o) : selected.delete(cb.dataset.o); if (selected.size > 4) { selected.delete(cb.dataset.o); cb.checked = false; } updateBar(); });

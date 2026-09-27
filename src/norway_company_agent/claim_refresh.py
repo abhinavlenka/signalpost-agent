@@ -75,8 +75,10 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
     curr_claims = {claim["claim_key"]: claim for claim in current["claims"]}
     curr_evidence_ids = {item["evidence_id"] for item in current["evidence"]}
     availability = current.get("availability") or {}
+    previous_availability = previous.get("availability") or {}
     changes: list[dict[str, Any]] = []
     carried = 0
+    backfilled = 0
 
     def keep_previous_evidence(evidence_ids: list[str]) -> None:
         for evidence_id in evidence_ids:
@@ -89,6 +91,12 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
         if before is None:
             claim["first_seen"] = now
             claim["last_seen"] = now
+            if previous_availability.get(claim["family"]) in {None, "failed", "blocked"}:
+                # The source was not successfully checked last run: this is a first observation, not a
+                # change in the world. Reporting it as new would be a false change.
+                claim["backfilled"] = True
+                backfilled += 1
+                continue
             change_type = ADDED.get(claim["family"], "added")
             changes.append({
                 "change_id": _change_id(key, change_type, None, claim["value_hash"]),
@@ -163,5 +171,6 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
         "changes_detected": len(changes),
         "material_changes": sum(1 for change in changes if change["material"]),
         "carried_forward_claims": carried,
+        "backfilled_claims": backfilled,
     }
     return current

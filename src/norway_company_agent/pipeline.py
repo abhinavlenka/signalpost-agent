@@ -194,6 +194,30 @@ def research_company(profile: dict[str, Any]) -> dict[str, Any]:
     return profile
 
 
+def retry_failed_accounts(profiles: dict[str, dict[str, Any]], budget: RequestBudget, *, max_seconds: float, max_requests: int) -> dict[str, Any]:
+    """Second pass for the accounts register, whose 503 bursts can outlast per-company retries."""
+    pending = [org for org, profile in profiles.items() if (profile["evidence"].get("financials") or {}).get("status") == "source_error"
+               and "budget_exhausted" not in str((profile["evidence"].get("financials") or {}).get("note") or "")]
+    started, start_used, recovered, rounds = time.monotonic(), budget.used, 0, 0
+    while pending and time.monotonic() - started < max_seconds and budget.used - start_used < max_requests and budget.remaining > 100:
+        rounds += 1
+        still = []
+        for org in pending:
+            if time.monotonic() - started >= max_seconds or budget.used - start_used >= max_requests:
+                still.append(org)
+                continue
+            records, _ = fetch_official_modules(org, {"financials"})
+            if records["financials"].get("status") in {"available", "not_found"}:
+                profiles[org]["evidence"]["financials"] = records["financials"]
+                recovered += 1
+            else:
+                still.append(org)
+        pending = still
+        if pending:
+            time.sleep(5)
+    return {"recovered": recovered, "still_failed": len(pending), "rounds": rounds, "requests": budget.used - start_used}
+
+
 def attach_jobs(profile: dict[str, Any], index: NavJobIndex, name_index: dict[str, Any]) -> None:
     ev = profile["evidence"]
     if index.error and not index.ads:
@@ -277,6 +301,10 @@ def run_batch(
                 future.result()
                 if done % 20 == 0 or done == len(orgs):
                     log(f"  {done}/{len(orgs)} companies, {budget.used} requests")
+
+        sweep_seconds = min(600.0, max(0.0, (budget.time_left() or 600) - 600))
+        report["accounts_retry"] = retry_failed_accounts(profiles, budget, max_seconds=sweep_seconds, max_requests=max(0, budget.remaining - 500))
+        log(f"accounts retry sweep: {report['accounts_retry']}")
 
         if nav:
             remaining = max(5.0, (budget.time_left() or 600) - 240)

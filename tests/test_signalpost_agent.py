@@ -198,3 +198,13 @@ def test_token_set_candidates_keep_initials_and_skip_generic_names():
     assert names("J.A. INVEST AS") == []
     assert names("FRITID AS") == []
     assert names("HAKKESPETTEN BARNEHAGE AS") == ["Hakkespetten Barnehage"]
+
+
+def test_recovered_source_is_backfill_not_change():
+    broken = profile()
+    broken["evidence"]["financials"] = evidence("financials", "source_error", "official_annual_accounts", "https://x", note="HTTP 503")
+    first = apply_refresh(None, build_envelope(broken, run=RUN))
+    assert first["availability"]["annual_accounts"] == "failed"
+    second = apply_refresh(copy.deepcopy(first), build_envelope(profile(), run=RUN2))
+    assert second["changes"] == []
+    assert second["refresh"]["backfilled_claims"] > 0
