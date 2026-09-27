@@ -38,6 +38,10 @@ REMOVED = {
 }
 MATERIAL_FAMILIES = {"legal_identity", "annual_accounts", "leadership", "official_website", "group_relationships", "jobs"}
 NON_REMOVABLE = {"dated_activity", "filing_history"}  # history does not "disappear"; windows simply move
+# Website-derived facts flap when a site is slow or a page times out. A removal is reported only after
+# two consecutive runs miss the fact; the first miss carries it forward as stale.
+DEBOUNCED_FAMILIES = {"official_website", "company_profiles", "public_brand"}
+DEBOUNCED_FIELDS = {"careers_page", "website_news"}
 
 
 def _change_id(*parts: Any) -> str:
@@ -135,7 +139,9 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
         family = before.get("family")
         family_state = availability.get(family)
         source_checked = family_state in {"available", "not_available"}
-        if family in NON_REMOVABLE or not source_checked or family not in REMOVED:
+        debounced = family in DEBOUNCED_FAMILIES or before.get("field") in DEBOUNCED_FIELDS
+        first_miss = debounced and not before.get("stale")
+        if family in NON_REMOVABLE or not source_checked or family not in REMOVED or first_miss:
             # Keep the last supported value; expose it as not re-verified in this run.
             carried += 1
             marker = {"historical": True} if family in NON_REMOVABLE and source_checked else {"stale": True}
@@ -151,7 +157,7 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
             "claim_key": key,
             "family": family,
             "field": before.get("field"),
-            "previous_value": before.get("value") if family != "jobs" else {"title": (before.get("value") or {}).get("title")},
+            "previous_value": {"title": before["value"].get("title")} if family == "jobs" and isinstance(before.get("value"), dict) else before.get("value"),
             "current_value": None,
             "material": _material(before, change_type),
             "detected_at": now,

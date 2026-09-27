@@ -245,3 +245,20 @@ def test_group_site_profiles_require_norway_handle():
     assert profiles == ["https://linkedin.com/company/bestseller-norge"]
     scope = [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"]
     assert scope == ["possibly_group_or_international"]
+
+
+def test_website_facts_need_two_misses_and_string_job_claims_do_not_crash():
+    p = profile()
+    p["evidence"]["website"] = evidence("website", "available", "registry_linked_company_website", "https://aas.no/", value={
+        "final_url": "https://aas.no/", "requested_url": "https://aas.no/", "content_sha256": "f" * 64, "identity_markers": {"https://aas.no/": ["organisation_number"]},
+        "identity_assessment": {"publishable": True, "score": 1.0, "reasons": ["orgnr"], "method": "m"},
+        "social_links": [{"platform": "facebook", "url": "https://facebook.com/aas"}], "careers_pages": ["https://aas.no/jobb"]})
+    first = apply_refresh(None, build_envelope(p, run=RUN))
+    gone = profile()
+    gone["evidence"]["website"] = evidence("website", "not_found", "registry_linked_company_website", "https://x", note="registry lists no website")
+    second = apply_refresh(copy.deepcopy(first), build_envelope(gone, run=RUN2))
+    assert second["changes"] == []  # first miss: carried forward as stale
+    assert any(c["field"] == "official_website" and c.get("stale") for c in second["claims"])
+    third = apply_refresh(copy.deepcopy(second), build_envelope(gone, run=RUN2))
+    kinds = sorted(c["change_type"] for c in third["changes"])
+    assert "removed_website" in kinds and "removed_company_profile" in kinds and "closed_job" in kinds

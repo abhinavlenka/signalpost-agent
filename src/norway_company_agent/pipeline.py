@@ -357,6 +357,15 @@ def discover_by_domain_guess(profile: dict[str, Any]) -> dict[str, Any] | None:
     return {"tried": tried}
 
 
+def previous_website(envelope: dict[str, Any]) -> dict[str, Any] | None:
+    evidence_by_id = {item["evidence_id"]: item for item in envelope.get("evidence") or []}
+    for claim in envelope.get("claims") or []:
+        if claim.get("field") == "official_website" and claim.get("value"):
+            source = evidence_by_id.get((claim.get("evidence_ids") or [None])[0]) or {}
+            return {"url": claim["value"], "source_class": source.get("source_class"), "discovery": source.get("source_class")}
+    return None
+
+
 def research_registry_website(profile: dict[str, Any]) -> None:
     """Phase 3: the registry-listed website through the exact-entity gate."""
     if profile.get("website"):
@@ -370,10 +379,34 @@ def research_registry_website(profile: dict[str, Any]) -> None:
 
 
 def research_discovery(profile: dict[str, Any]) -> None:
-    """Phase 4: e-mail-domain and name-derived website discovery for companies without a verified site."""
+    """Phase 4: re-verify last run's website, else e-mail-domain and name-derived discovery."""
     website = profile["evidence"].get("website") or {}
-    if not ((website.get("value") or {}).get("identity_assessment") or {}).get("publishable"):
-        profile["domain_guess"] = discover_by_domain_guess(profile)
+    if ((website.get("value") or {}).get("identity_assessment") or {}).get("publishable"):
+        return
+    known = profile.get("known_website")
+    if known and known.get("url"):
+        # Refresh: re-check the previously verified site at its URL instead of rediscovering it.
+        record, _ = fetch_website(known["url"], identity=registry_identity(profile), max_pages=3)
+        if record.get("status") == "available":
+            record["source_type"] = record["source_class"] = known.get("source_class") or "previously_verified_website"
+            record["value"]["registry_listed"] = known.get("source_class") in {"registry_linked_company_website", "registry_email_domain"}
+            gated = apply_website_identity_gate(profile, record)["website"]
+            value = gated.get("value") or {}
+            assessment = value.get("identity_assessment") or {}
+            markers = {marker for items in (value.get("identity_markers") or {}).values() for marker in items}
+            if assessment.get("publishable") or "organisation_number" in markers or markers & {"address", "phone"}:
+                assessment.update({"status": "exact", "publishable": True, "method": "previously_verified_recheck_v1",
+                                   "score": max(float(assessment.get("score") or 0), 0.93),
+                                   "reasons": [*assessment.get("reasons", []), f"re-verified site from previous run (markers: {sorted(markers)})"]})
+                value["social_links"] = [{"platform": item["platform"], "url": item["url"]} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
+                value["discovery_method"] = known.get("discovery") or "previously_verified"
+                profile["evidence"]["website"] = gated
+                return
+        elif record.get("status") in {"source_error", "blocked"}:
+            # Could not re-check: keep the website state failed so refresh carries the last value forward.
+            profile["evidence"]["website"] = record
+            return
+    profile["domain_guess"] = discover_by_domain_guess(profile)
 
 
 def research_company(profile: dict[str, Any]) -> dict[str, Any]:
@@ -440,12 +473,12 @@ def _deadline_evidence(field: str, source_type: str, url: str) -> Callable[[dict
     return mark
 
 
-def retry_failed_accounts(profiles: dict[str, dict[str, Any]], budget: RequestBudget, *, max_seconds: float, max_requests: int) -> dict[str, Any]:
+def retry_failed_accounts(profiles: dict[str, dict[str, Any]], budget: RequestBudget, *, max_seconds: float, max_requests: int, max_rounds: int = 3) -> dict[str, Any]:
     """Second pass for the accounts register, whose 503 bursts can outlast per-company retries."""
     pending = [org for org, profile in profiles.items() if (profile["evidence"].get("financials") or {}).get("status") == "source_error"
                and "budget_exhausted" not in str((profile["evidence"].get("financials") or {}).get("note") or "")]
     started, start_used, recovered, rounds = time.monotonic(), budget.used, 0, 0
-    while pending and time.monotonic() - started < max_seconds and budget.used - start_used < max_requests and budget.remaining > 100:
+    while pending and rounds < max_rounds and time.monotonic() - started < max_seconds and budget.used - start_used < max_requests and budget.remaining > 100:
         rounds += 1
         still = []
         for org in pending:
@@ -547,6 +580,10 @@ def run_batch(
         previous_envelopes = load_previous(previous, state, orgs)
         report["previous_envelopes"] = len(previous_envelopes)
         profiles = {org: base_profile(org, universe_rows.get(org), universe_meta) for org in orgs}
+        for org, previous_envelope in previous_envelopes.items():
+            known = previous_website(previous_envelope)
+            if known:
+                profiles[org]["known_website"] = known
 
         nav = NavJobIndex(since_days=nav_days).start() if use_nav else None
         ordered = [profiles[org] for org in orgs]
