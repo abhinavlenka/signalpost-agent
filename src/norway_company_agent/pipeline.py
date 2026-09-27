@@ -318,11 +318,13 @@ def attach_jobs(profile: dict[str, Any], index: NavJobIndex, name_index: dict[st
     )
     result["window_days"] = index.since_days
     result["feed_complete"] = index.complete
-    status = "available" if result["jobs"] or not result["errors"] else "source_error"
-    ev["jobs"] = evidence(
-        "jobs", status, "official_job_register_nav", "https://pam-stilling-feed.nav.no/api/v1/feed",
-        value=result, note=None if status == "available" else "; ".join(item["error"] for item in result["errors"][:3]),
-    )
+    if result["jobs"] or (not result["errors"] and index.complete):
+        status, note = "available", None
+    elif result["errors"]:
+        status, note = "source_error", "; ".join(item["error"] for item in result["errors"][:3])
+    else:
+        status, note = "source_error", f"job feed only partially read ({index.pages} pages): absence of ads is not established"
+    ev["jobs"] = evidence("jobs", status, "official_job_register_nav", "https://pam-stilling-feed.nav.no/api/v1/feed", value=result, note=note)
 
 
 def discover_websites(profile: dict[str, Any]) -> None:
