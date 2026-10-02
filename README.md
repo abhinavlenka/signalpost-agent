@@ -20,6 +20,7 @@ uv run python -m signalpost run --input batch.txt
 |---|---|
 | `out/envelopes.jsonl` | exactly one terminal envelope per input number |
 | `out/run-report.json` | request count by purpose, runtime, p50/p95, field-state totals, validation |
+| `out/site/index.html` | the explorer for this run; open it straight from disk, no web server needed |
 | `state/latest/<org>.json` | latest envelope per company (the previous-run input for the next refresh) |
 | `state/snapshots/<run_id>/envelopes.jsonl` | immutable per-run snapshot |
 
@@ -69,8 +70,9 @@ The organisation number is the anchor throughout:
 
 1. **Registry facts** come from the live registry record for that number.
 2. **Websites.** A registry-listed site is published only when it passes an exact-entity gate: the org number appears anywhere in the site's raw HTML, or the full legal name appears in the homepage identity markup, or the listed domain spells the full legal name.
-   - **Discovered sites.** Sites found from the registry e-mail domain or a name-derived domain face a stricter rule: the org number on the site, or the exact legal name **plus** the registered street address or phone.
+   - **Discovered sites.** A site found from a name-derived domain faces a stricter rule: the org number on the site, or the exact legal name **plus** the registered street address or phone. A site on the company's registry e-mail domain is company-declared to the register, so it faces the same gate as a registry-listed site.
    - **Failed gate.** Registry-listed sites that fail the gate are marked `ambiguous` and labelled as a registry-declared site under *public brand*. Nothing is extracted from them.
+   - **Pages on someone else's site.** A deep page on a domain not named after the company (a chain's member page, a directory, a platform) is labelled `page_on_third_party_site`. Only the URL is published: no description, profiles, careers page or news, because those belong to the site owner.
    - **Possible group sites.** A non-`.no` site proven only by name is labelled `possibly_group_or_international`. Only Norway-specific social handles are published from it, and no news.
 3. **Social profiles** are published only when a verified site links them and the handle matches the legal name.
 4. **Jobs** are published only when the NAV ad's `employer.orgnr` is the company or one of its own registered subunits. Name similarity only nominates candidates.
@@ -81,11 +83,13 @@ See [`DATA_SCHEMA.md`](DATA_SCHEMA.md) for the envelope format, [`REFRESH.md`](R
 
 ## Explorer (desktop and mobile)
 
+Every run writes the explorer to `out/site/`. To build it elsewhere, or from several runs:
+
 ```bash
 uv run python scripts/build_site.py --envelopes out/envelopes.jsonl --site site
 ```
 
-This builds a static site (GitHub Pages ready) with:
+It is a static site (GitHub Pages ready, and it also opens from disk) with:
 - search and filters
 - side-by-side comparison of up to 4 companies
 - per-company pages where every fact links to its evidence, retrieval time, content hash and locator

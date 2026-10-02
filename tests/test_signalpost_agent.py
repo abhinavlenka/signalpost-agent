@@ -262,3 +262,126 @@ def test_website_facts_need_two_misses_and_string_job_claims_do_not_crash():
     third = apply_refresh(copy.deepcopy(second), build_envelope(gone, run=RUN2))
     kinds = sorted(c["change_type"] for c in third["changes"])
     assert "removed_website" in kinds and "removed_company_profile" in kinds and "closed_job" in kinds
+
+
+def website_profile(final_url):
+    p = profile()
+    p["evidence"]["website"] = evidence("website", "available", "registry_linked_company_website", final_url, value={
+        "final_url": final_url, "requested_url": "https://aas.no/", "content_sha256": "f" * 64, "identity_markers": {final_url: ["organisation_number"]},
+        "identity_assessment": {"publishable": True, "score": 1.0, "reasons": ["orgnr"], "method": "m"}})
+    return p
+
+
+@pytest.mark.parametrize("final_url, published", [
+    ("https://aas.no:443/bygg/", "https://aas.no/bygg/"),
+    ("http://aas.no:80/", "http://aas.no/"),
+    ("https://aas.no:8443/", "https://aas.no:8443/"),
+    ("https://aas.no/", "https://aas.no/"),
+])
+def test_published_website_drops_default_port(final_url, published):
+    envelope = build_envelope(website_profile(final_url), run=RUN)
+    assert [c["value"] for c in envelope["claims"] if c["field"] == "official_website"] == [published]
+
+
+def js_payload(path, prefix):
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith(prefix) and text.endswith(";\n")
+    return json.loads(text[len(prefix):-2])
+
+
+def test_site_data_is_script_loadable_so_it_opens_without_a_server(tmp_path):
+    from norway_company_agent.site import build_site
+
+    envelope = apply_refresh(None, build_envelope(profile(), run=RUN))
+    result = build_site([envelope], tmp_path / "site")
+    assert result == {"site": str(tmp_path / "site"), "companies": 1}
+    assert (tmp_path / "site" / "index.html").read_text(encoding="utf-8").lstrip().lower().startswith("<!doctype html>")
+    rows = js_payload(tmp_path / "site" / "data" / "index.js", "window.SP_INDEX=")
+    assert [(row["o"], row["n"], row["r"]) for row in rows] == [("888567232", "AAS ELEKTRONIKK AS", 1425713.0)]
+    company = js_payload(tmp_path / "site" / "data" / "c" / "888567232.js", 'window.SP_COMPANY["888567232"]=')
+    assert company["organisation_number"] == "888567232" and company["claims"]
+    assert (tmp_path / "site" / "manifest.txt").read_text() == "888567232\n"
+
+
+def test_run_outputs_include_explorer(tmp_path):
+    from norway_company_agent.pipeline import write_outputs
+
+    envelope = apply_refresh(None, build_envelope(profile(), run=RUN))
+    (tmp_path / "out").mkdir()
+    write_outputs(tmp_path / "out", tmp_path / "state", "r1", [envelope])
+    assert (tmp_path / "out" / "site" / "index.html").is_file()
+    assert (tmp_path / "out" / "site" / "data" / "c" / "888567232.js").is_file()
+
+
+def test_explorer_failure_never_costs_the_envelopes(tmp_path):
+    from norway_company_agent.pipeline import write_outputs
+
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "site").write_text("in the way")  # site directory cannot be created
+    envelope = apply_refresh(None, build_envelope(profile(), run=RUN))
+    write_outputs(out, tmp_path / "state", "r1", [envelope])
+    assert len((out / "envelopes.jsonl").read_text(encoding="utf-8").splitlines()) == 1
+    assert (tmp_path / "state" / "latest" / "888567232.json").is_file()
+
+
+def jsonld_page(kind, headline, url):
+    node = {"@context": "https://schema.org", "@type": kind, "headline": headline, "datePublished": "2022-11-10T08:00:00+00:00", "url": url}
+    return f'<html><head><script type="application/ld+json">{json.dumps(node)}</script></head><body></body></html>'
+
+
+@pytest.mark.parametrize("headline, url, kept", [
+    ("Ny rammeavtale med Bane NOR", "https://aas.no/nyheter/ny-rammeavtale/", True),
+    ("Forside - Aas Elektronikk AS", "https://aas.no/", False),
+    ("Kontakt - Aas Elektronikk AS", "https://aas.no/kontakt/", False),
+    ("Om Oss - Aas Elektronikk AS", "https://aas.no/om-oss/", False),
+    ("Karriere - Aas Elektronikk", "https://aas.no/om-aas/karriere/", False),
+])
+def test_static_pages_marked_as_articles_are_not_dated_news(headline, url, kept):
+    from bs4 import BeautifulSoup
+    from norway_company_agent.website import dated_items
+
+    html = jsonld_page("Article", headline, url)
+    titles = [item["title"] for item in dated_items(html, url, BeautifulSoup(html, "html.parser"))]
+    assert titles == ([headline] if kept else [])
+
+
+def chain_profile(final_url, markers=()):
+    p = profile()
+    p["evidence"]["website"] = evidence("website", "available", "registry_linked_company_website", final_url, value={
+        "final_url": final_url, "requested_url": final_url, "content_sha256": "f" * 64, "identity_markers": {final_url: list(markers)},
+        "identity_assessment": {"publishable": True, "score": 0.95, "reasons": ["name"], "method": "m"},
+        "title": "AAS ELEKTRONIKK AS | Elkjeden - Ekte fagfolk", "description": "Elkjeden er en kjede av lokale elektrikere.",
+        "social_links": [{"platform": "facebook", "url": "https://facebook.com/aaselektronikk"}], "careers_pages": ["https://www.elkjeden.no/jobb"],
+        "news_items": [{"date": "2026-01-02", "title": "Elkjeden vokser", "url": "https://www.elkjeden.no/nyheter/vokser"}]})
+    return p
+
+
+def web_fields(envelope):
+    return sorted(c["field"] for c in envelope["claims"] if c["family"] in {"official_website", "company_profiles", "jobs", "dated_activity", "public_brand"} and c["evidence_ids"] and c["field"] not in {"annual_accounts_filed"})
+
+
+@pytest.mark.parametrize("url", [
+    "https://www.elkjeden.no/finn-elektriker/agder/aas-elektronikk-as",
+    "https://www.elektronikkjeden.no/finn-elektriker/agder/aas-elektronikk-as",  # chain name shares only the trade word
+    "https://aas-elektronikk.kjedeportal.no/om",                                  # company subdomain on a platform
+])
+def test_member_page_on_a_chain_site_publishes_only_the_labelled_url(url):
+    envelope = build_envelope(chain_profile(url), run=RUN)
+    assert web_fields(envelope) == ["official_website", "website_scope"]
+    assert [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"] == ["page_on_third_party_site"]
+    assert envelope["availability"]["official_website"] == "available"
+    text = build_summary(apply_refresh(None, envelope))["text"]
+    assert "describes it as" not in text and "verified website" not in text
+    assert f"third-party site: {url}" in text
+
+
+@pytest.mark.parametrize("final_url, markers", [
+    ("https://www.aas.no/elektronikk/", ()),                       # own domain, deep path
+    ("https://www.elektronikk-aas.no/om-oss/", ()),                # own domain, words in another order
+    ("https://www.elkjeden.no/", ()),                              # brand domain root declared in the register
+    ("https://www.elkjeden.no/agder/aas", ("organisation_number",)),  # org number on the page
+])
+def test_own_or_number_verified_sites_keep_their_content(final_url, markers):
+    envelope = build_envelope(chain_profile(final_url, markers), run=RUN)
+    assert web_fields(envelope) == ["careers_page", "facebook", "official_website", "self_description", "website_brand_title", "website_news", "website_scope"]

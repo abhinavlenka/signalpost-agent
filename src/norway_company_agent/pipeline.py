@@ -20,6 +20,7 @@ from .evidence import evidence, utc_now
 from .identity import apply_website_identity_gate
 from .jobs_nav import NavJobIndex, match_company_jobs, raw_tokens
 from .official import fetch_official_modules, set_accounts_lanes
+from .site import build_site
 from .summary import build_summary
 from .website import fetch_website
 
@@ -709,3 +710,7 @@ def write_outputs(out: Path, state: Path, run_id: str, envelopes: list[dict[str,
     for envelope in envelopes:
         if envelope.get("claims") is not None and len(envelope["organisation_number"]) == 9:
             (latest / f"{envelope['organisation_number']}.json").write_text(json.dumps(envelope, ensure_ascii=False), encoding="utf-8")
+    try:
+        build_site(envelopes, out / "site")
+    except Exception as exc:  # the explorer is a convenience; it must never cost the envelopes
+        log(f"explorer not written: {type(exc).__name__}: {exc}")

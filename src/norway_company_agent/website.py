@@ -258,6 +258,16 @@ def page_category(url: str) -> str | None:
     return next((category for category, terms in PAGE_CATEGORIES if any(term in path for term in terms)), None)
 
 
+STATIC_PAGE_SLUG = re.compile(
+    r"^(om|om[-_]oss.*|about.*|kontakt.*|contact.*|karriere.*|careers?|jobb.*|ledige?[-_]stilling.*|butikker|ansatte|team|personvern.*|privacy.*|hjem|home|forside|index(\.\w+)?)$")
+
+
+def is_static_page(url: str) -> bool:
+    """Homepage, about, contact and similar pages: many CMSs mark them as schema.org Article, but they are not news."""
+    segments = [segment for segment in urllib.parse.urlparse(url).path.casefold().split("/") if segment]
+    return not segments or bool(STATIC_PAGE_SLUG.match(segments[-1])) or (len(segments) == 1 and segments[0].startswith(("om-", "om_")))
+
+
 DATE_PATTERN = re.compile(r"(20\d{2})-(\d{2})-(\d{2})")
 
 
@@ -292,7 +302,7 @@ def dated_items(html: str, page_url: str, soup: BeautifulSoup) -> list[dict[str,
                 url = node.get("url") or node.get("mainEntityOfPage") or page_url
                 if isinstance(url, dict):
                     url = url.get("@id") or page_url
-                if date and title and isinstance(title, str):
+                if date and title and isinstance(title, str) and not is_static_page(str(url)):
                     items[str(url) + date] = {"date": date, "title": title.strip()[:200], "url": str(url), "locator": "script[type='application/ld+json']"}
             for child in node.values():
                 walk(child)

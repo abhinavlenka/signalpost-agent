@@ -127,12 +127,17 @@ const link = (u, label) => safeUrl(u) ? `<a href="${esc(u)}" target="_blank" rel
 try { const t = localStorage.getItem("sp-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
 $("#theme").onclick = () => { const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; try { localStorage.setItem("sp-theme", next); } catch (e) {} };
 
+// Data is loaded with <script> tags, not fetch(), so the explorer also opens straight from disk (file://).
+window.SP_COMPANY = {};
+function script(src) {
+  return new Promise((resolve, reject) => { const el = document.createElement("script"); el.src = src; el.onload = resolve; el.onerror = () => reject(new Error(`missing ${src}`)); document.head.appendChild(el); });
+}
 async function load() {
-  rows = await (await fetch("data/index.json")).json();
+  try { await script("data/index.js"); rows = window.SP_INDEX || []; } catch (err) { $("#app").innerHTML = `<div class="empty">Could not load: ${esc(err.message)}</div>`; return; }
   route();
 }
-async function company(org) {
-  if (!cache[org]) cache[org] = await (await fetch(`data/c/${org}.json`)).json();
+function company(org) {
+  if (!cache[org]) cache[org] = script(`data/c/${org}.js`).then(() => window.SP_COMPANY[org]);
   return cache[org];
 }
 function dots(a) { return `<span class="dots" title="${esc(Object.entries(a||{}).map(([k,v])=>`${FAMILIES[k]||k}: ${v}`).join("\n"))}">` + Object.keys(FAMILIES).map(k => `<span class="dot ${esc((a||{})[k]||"")}"></span>`).join("") + "</span>"; }
@@ -214,7 +219,7 @@ async function renderCompare(orgs) {
     ["Chair", e => esc(pick(e,"leadership","role").find(c => c.value.role_code === "LEDE")?.value.name || "—")],
     ["Workplaces", e => pick(e,"registered_workplaces","registered_workplace").length || "—"],
     ["Website", e => { const w = pick(e,"official_website","official_website")[0]; return w ? link(w.value) : `<span class="badge">${esc(e.availability?.official_website)}</span>`; }],
-    ["Open jobs", e => pick(e,"jobs","open_job").length || `<span class="badge">${esc(e.availability?.jobs)}</span>`],
+    ["Open jobs", e => pick(e,"jobs","open_job").length || (pick(e,"jobs","careers_page")[0] ? link(pick(e,"jobs","careers_page")[0].value, "careers page") : `<span class="badge">${esc(e.availability?.jobs)}</span>`)],
     ["Changes", e => (e.changes||[]).length],
   ];
   $("#app").innerHTML = `<a class="back" href="#/">← All companies</a><div class="card" style="overflow-x:auto"><table><thead><tr><th></th>${envs.map(e => `<th><a href="#/c/${esc(e.organisation_number)}">${esc(e.legal_name)}</a></th>`).join("")}</tr></thead>

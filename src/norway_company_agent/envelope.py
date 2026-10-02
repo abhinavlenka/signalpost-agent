@@ -15,6 +15,10 @@ import re
 import urllib.parse
 from typing import Any, Iterable
 
+import tldextract
+
+from .identity import _tokens as name_tokens
+
 STATES = ("available", "not_available", "blocked", "not_applicable", "ambiguous", "failed")
 
 SECTIONS = {
@@ -345,6 +349,16 @@ def build_leadership(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
         builder.state("registered_workplaces", l_state, l_reason)
 
 
+def _without_default_port(url: str | None) -> str | None:
+    """Drop an explicit :443/:80 that some servers add on redirect; the evidence keeps the fetched URL."""
+    if not url:
+        return url
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.port != {"https": 443, "http": 80}.get(parsed.scheme):
+        return url
+    return urllib.parse.urlunsplit(parsed._replace(netloc=parsed.netloc.rsplit(":", 1)[0]))
+
+
 def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
     ev = profile.get("evidence", {})
     website = ev.get("website")
@@ -361,20 +375,23 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
             extraction_method=assessment.get("method") or "identity_gate",
             note="; ".join(assessment.get("reasons") or []),
         )
-        scope = website_scope(value)
+        scope = website_scope(value, profile.get("name"))
+        third_party = scope == "page_on_third_party_site"
         span = "; ".join(assessment.get("reasons") or [])
         if scope == "possibly_group_or_international":
             span += "; site scope: possibly a group or international site (no organisation number on site, non-.no domain)"
-        builder.claim("official_website", "official_website", value.get("final_url"), eid, identity="official_website",
-                      span=span, confidence=float(assessment.get("score") or 0.9) if scope != "possibly_group_or_international" else 0.8)
+        if third_party:
+            span += "; site scope: a page naming this company on a site under another name (chain, directory or platform); only the URL is published"
+        builder.claim("official_website", "official_website", _without_default_port(value.get("final_url")), eid, identity="official_website",
+                      span=span, confidence=float(assessment.get("score") or 0.9) if scope not in {"possibly_group_or_international", "page_on_third_party_site"} else 0.8)
         builder.claim("public_brand", "website_scope", scope, eid, identity="website_scope", locator="identity_markers")
-        brand = value.get("site_name") or value.get("title")
+        brand = None if third_party else value.get("site_name") or value.get("title")
         if brand:
             builder.claim("public_brand", "website_brand_title", brand[:200], eid, identity="website_brand_title", locator="html>head>title")
-        if value.get("description"):
+        if value.get("description") and not third_party:
             builder.claim("public_brand", "self_description", value["description"][:600], eid, identity="self_description", locator='meta[name="description"]')
         builder.state("official_website", "available", None, discovery=value.get("discovery_method") or "registry_listed")
-        social = value.get("social_links") or []
+        social = [] if third_party else value.get("social_links") or []
         if scope == "possibly_group_or_international":
             social = [link for link in social if NORWAY_HANDLE.search(link["url"].rsplit("/", 1)[-1])]
         for link in social:
@@ -382,7 +399,7 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
                           span="profile linked from the verified company website")
         if not social:
             builder.state("company_profiles", "not_available", "verified website links no company-owned social profiles")
-        group_site = scope == "possibly_group_or_international"
+        group_site = scope in {"possibly_group_or_international", "page_on_third_party_site"}
         for page in [] if group_site else value.get("careers_pages") or []:
             builder.claim("jobs", "careers_page", page, eid, identity=["careers_page", page], locator="a[href]",
                           span="careers page on the verified company website")
@@ -399,7 +416,7 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
             reg_eid = _official_evidence(builder, reg, "brreg_entity_json_v1") if reg.get("status") == "available" else builder.add_evidence(
                 source_url=value.get("requested_url") or website.get("source_url"), final_url=value.get("final_url"), source_class="registry_linked_company_website",
                 retrieved_at=website.get("retrieved_at"), content_sha256=value.get("content_sha256"), extraction_method="registry_hjemmeside_v1")
-            builder.claim("public_brand", "registry_declared_site", {"url": value.get("final_url"), "relation": "declared in the official register; exact-entity identity not verified (possible brand, parent or franchise site)"},
+            builder.claim("public_brand", "registry_declared_site", {"url": _without_default_port(value.get("final_url")), "relation": "declared in the official register; exact-entity identity not verified (possible brand, parent or franchise site)"},
                           reg_eid, identity="registry_declared_site", locator="$.hjemmeside", confidence=0.6)
         builder.state("company_profiles", "ambiguous", "no verified website to anchor company-owned profiles")
     else:
@@ -409,14 +426,34 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
         builder.state("company_profiles", "not_available" if state == "not_available" else state, "no verified website to anchor company-owned profiles")
 
 
+def _own_domain(host: str, legal_name: str) -> bool:
+    """Whether the registrable domain is named after the company.
+
+    A deep page on a domain under another name is a member/listing page on someone else's site
+    (chain, directory, platform). One shared trade word is not enough ("HÅST RØR AS" on rorkjop.no):
+    the domain must contain the first name word, or at least two name words.
+    """
+    label = re.sub(r"[^a-z0-9]", "", tldextract.extract(host).domain.lower())
+    spellings = [name_tokens(legal_name), name_tokens(legal_name.translate(AA_SPELLING))]
+    if not spellings[0]:
+        return True  # nothing distinctive to compare
+    if any(tokens and tokens[0] in label for tokens in spellings):
+        return True
+    return len({token for tokens in spellings for token in tokens if len(token) >= 3 and token in label}) >= 2
+
+
+AA_SPELLING = str.maketrans({"å": "aa", "Å": "aa", "ø": "oe", "Ø": "oe"})
 NORWAY_HANDLE = re.compile(r"(norge|norway|norsk|[-_.]no$|[-_.]no[-_.])", re.I)
 
 
-def website_scope(value: dict[str, Any]) -> str:
+def website_scope(value: dict[str, Any], legal_name: str | None = None) -> str:
     markers = {marker for items in (value.get("identity_markers") or {}).values() for marker in items}
     if "organisation_number" in markers:
         return "exact_entity_verified_by_organisation_number"
-    host = urllib.parse.urlparse(value.get("final_url") or "").hostname or ""
+    parsed = urllib.parse.urlparse(value.get("final_url") or "")
+    host = parsed.hostname or ""
+    if parsed.path.strip("/") and legal_name and not _own_domain(host, legal_name):
+        return "page_on_third_party_site"
     if host.endswith(".no"):
         return "norwegian_domain"
     return "possibly_group_or_international"

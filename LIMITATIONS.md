@@ -14,6 +14,8 @@
   - Companies still unresolved after that are `failed` with reason `HTTP 503`, which is a shared-source failure.
 - **JavaScript-only websites** are not rendered, since no browser is used. The identity gate can then fail and the site becomes `ambiguous`.
 - **Dated news** comes only from structured markup (JSON-LD articles and `<time datetime>` elements) on up to 5 pages of a verified site. Dates are never guessed from free text.
+  - Homepage, about, contact and careers pages are skipped even when the site marks them as articles.
+  - Product or information pages that a site marks as articles can still appear as news.
 - **Sentiment and reviews** are not produced. We found no permitted, durable source that ties them to an exact organisation number.
 
 ## Source rights
