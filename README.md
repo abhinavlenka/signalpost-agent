@@ -91,12 +91,12 @@ Every run writes the explorer to `out/site/`. To build it elsewhere, or from sev
 uv run python scripts/build_site.py --envelopes out/envelopes.jsonl --site site
 ```
 
-It is a static site (GitHub Pages ready, and it also opens from disk) with:
-- search and filters
-- side-by-side comparison of up to 4 companies
-- per-company pages where every fact links to its evidence, retrieval time, content hash and locator
-- summary sentences with clickable claim citations
-- the change log and explicit unknowns
+It is a static site (GitHub Pages ready, and it also opens from disk) with no dependencies. A hosted copy of the 100-company smoke test is at https://abhinavlenka.github.io/signalpost-agent/.
+
+- **Find.** Search by name, organisation number, place, industry, website or leader. Filter by verified website, hiring signal, company profiles, news, revenue and changes; each filter shows its count. Sort by coverage, name, revenue, result or employees. The search, filters and sort live in the URL, so a view can be shared. Export the current list as CSV.
+- **Compare.** Pick up to 4 companies from the list or a company page and compare identity, latest accounts, people and web presence side by side. The highest figure in each row is marked.
+- **Verify.** Every fact shows its source, retrieval time, content hash and locator, and has its own link. Summary sentences cite their facts. Accounts are shown as a year-by-year table whose figures link to their evidence. Each company page links to the official register.
+- **Desktop and mobile.** Card layout on phones, light and dark themes, keyboard access, visible focus, touch-sized controls, and status shown by text and shape as well as colour.
 
 ## 100-company smoke test
 

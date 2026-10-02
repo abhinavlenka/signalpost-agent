@@ -3,127 +3,248 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Signalpost explorer: find, compare and verify sourced profiles of Norwegian companies.">
 <title>Signalpost Explorer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231e40af'/%3E%3Cpath d='M9 22V10h3v12zm5.500 0V14h3v8zm5.500 0v-5h3v5z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
 :root {
-  --bg: #f7f7f5; --surface: #ffffff; --text: #1c1d1f; --muted: #62656b; --line: #e3e3df;
-  --accent: #1f5fbf; --accent-soft: #e6eefb; --ok: #1d7a46; --ok-soft: #e3f3ea; --warn: #9a5b00; --warn-soft: #fbf0dc;
-  --bad: #a8302a; --bad-soft: #f9e4e2; --na: #6b6f76; --na-soft: #eeeeec;
-  --radius: 10px; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.04);
+  --bg: #f8fafc; --surface: #ffffff; --raised: #f1f5f9; --text: #0f172a; --muted: #475569; --line: #e2e8f0; --line-strong: #cbd5e1; --control: #7f8ea6;
+  --accent: #1e40af; --accent-soft: #e0e9ff; --on-accent: #ffffff;
+  --ok: #166534; --ok-soft: #dcfce7; --warn: #92400e; --warn-soft: #fef3c7; --bad: #991b1b; --bad-soft: #fee2e2; --na: #475569; --na-soft: #eef2f7;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --radius: 10px; --radius-s: 6px; --shadow: 0 1px 2px rgba(15,23,42,.06), 0 2px 8px rgba(15,23,42,.04);
+  --z-header: 20; --z-bar: 30; --z-skip: 100;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --tap: 36px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #131416; --surface: #1c1d20; --text: #ececea; --muted: #a0a3a9; --line: #2e3034;
-    --accent: #7fb0ff; --accent-soft: #1d2a40; --ok: #6fd39b; --ok-soft: #173024; --warn: #f0b660; --warn-soft: #3a2d15;
-    --bad: #ff8b82; --bad-soft: #3d1c1a; --na: #a0a3a9; --na-soft: #26282b;
+    --bg: #0b1220; --surface: #111a2e; --raised: #18233b; --text: #e6eaf2; --muted: #a3b0c6; --line: #24304a; --line-strong: #34425f; --control: #5f7092;
+    --accent: #93b4ff; --accent-soft: #1b2a4d; --on-accent: #0b1220;
+    --ok: #86efac; --ok-soft: #12301f; --warn: #fcd34d; --warn-soft: #3a2c0c; --bad: #fca5a5; --bad-soft: #3b1717; --na: #a3b0c6; --na-soft: #1b2438;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
   }
 }
 :root[data-theme="dark"] {
-  --bg: #131416; --surface: #1c1d20; --text: #ececea; --muted: #a0a3a9; --line: #2e3034;
-  --accent: #7fb0ff; --accent-soft: #1d2a40; --ok: #6fd39b; --ok-soft: #173024; --warn: #f0b660; --warn-soft: #3a2d15;
-  --bad: #ff8b82; --bad-soft: #3d1c1a; --na: #a0a3a9; --na-soft: #26282b;
+  --bg: #0b1220; --surface: #111a2e; --raised: #18233b; --text: #e6eaf2; --muted: #a3b0c6; --line: #24304a; --line-strong: #34425f; --control: #5f7092;
+  --accent: #93b4ff; --accent-soft: #1b2a4d; --on-accent: #0b1220;
+  --ok: #86efac; --ok-soft: #12301f; --warn: #fcd34d; --warn-soft: #3a2c0c; --bad: #fca5a5; --bad-soft: #3b1717; --na: #a3b0c6; --na-soft: #1b2438;
+  --shadow: 0 1px 2px rgba(0,0,0,.4);
 }
+@media (pointer: coarse) { :root { --tap: 44px; } }
 * { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
-header { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
-.bar { max-width: 1200px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.brand { font-weight: 700; letter-spacing: -.01em; font-size: 17px; margin-right: 8px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+button, select, input { font: inherit; color: inherit; touch-action: manipulation; }
+button { cursor: pointer; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.skip { position: absolute; left: var(--s2); top: -60px; z-index: var(--z-skip); background: var(--accent); color: var(--on-accent); padding: var(--s2) var(--s4); border-radius: var(--radius-s); }
+.skip:focus { top: var(--s2); }
+
+header { position: sticky; top: 0; z-index: var(--z-header); background: var(--surface); border-bottom: 1px solid var(--line); }
+.bar { max-width: 1200px; margin: 0 auto; padding: var(--s3) var(--s4); display: flex; gap: var(--s3); align-items: center; }
+.brand { font-weight: 700; letter-spacing: -.01em; font-size: 17px; color: var(--text); white-space: nowrap; }
 .brand span { color: var(--muted); font-weight: 500; }
-input[type=search] { flex: 1 1 260px; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.chip { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px; padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer; }
-.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-main { max-width: 1200px; margin: 0 auto; padding: 16px; }
-.meta { color: var(--muted); font-size: 13px; margin: 0 0 12px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.search { flex: 1 1 260px; min-width: 0; }
+input[type=search] { width: 100%; min-height: var(--tap); padding: 7px 12px; border: 1px solid var(--control); border-radius: 8px; background: var(--bg); font-size: 16px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--tap); padding: 0 12px; border: 1px solid var(--control); background: var(--surface); border-radius: 8px; font-size: 14px; white-space: nowrap; transition: background-color .15s, border-color .15s; }
+.btn:hover { background: var(--raised); text-decoration: none; } .btn:active { background: var(--accent-soft); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn.icon { width: var(--tap); padding: 0; }
+.btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+main { max-width: 1200px; margin: 0 auto; padding: var(--s4); }
+main:focus, main:focus-visible, h1:focus, h1:focus-visible, h2[tabindex]:focus-visible { outline: none; }
+a.src { color: inherit; text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; }
+a.src:hover { color: var(--accent); text-decoration: underline solid; }
+main.has-bar { padding-bottom: 96px; }
+.toolbar { display: flex; gap: var(--s2) var(--s3); align-items: center; flex-wrap: wrap; margin-bottom: var(--s3); }
+.chips { display: flex; gap: var(--s2); flex-wrap: wrap; flex: 1 1 0; min-width: 260px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); border: 1px solid var(--control); background: var(--surface); border-radius: 999px; padding: 0 12px; font-size: 13px; white-space: nowrap; transition: background-color .15s, border-color .15s; }
+.chip:hover { background: var(--raised); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.chip .n { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 400; }
+.tools { display: flex; gap: var(--s2) var(--s3); align-items: center; }
+.sort { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+select { min-height: var(--tap); padding: 0 8px; border: 1px solid var(--control); border-radius: 8px; background: var(--surface); font-size: 14px; }
+.meta { color: var(--muted); font-size: 13px; margin: 0 0 var(--s3); display: flex; justify-content: space-between; gap: var(--s2) var(--s4); flex-wrap: wrap; align-items: center; }
+.legend { display: inline-flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow-wrap: break-word; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; background: var(--surface); }
-tbody tr { cursor: pointer; } tbody tr:hover { background: var(--accent-soft); }
+thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; background: var(--surface); white-space: nowrap; }
+thead th.num { text-align: right; }
+th button.sortbtn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 24px; }
+th button.sortbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+th[aria-sort="ascending"] .sortbtn::after { content: "▲"; font-size: 9px; } th[aria-sort="descending"] .sortbtn::after { content: "▼"; font-size: 9px; }
+th[aria-sort] { color: var(--text); }
+table.list tbody tr { cursor: pointer; transition: background-color .15s; } table.list tbody tr:hover { background: var(--raised); }
 td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.name { font-weight: 600; } .sub { color: var(--muted); font-size: 12.5px; }
-.dots { display: flex; gap: 3px; flex-wrap: nowrap; }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--na-soft); border: 1px solid var(--line); }
-.dot.available { background: var(--ok); border-color: var(--ok); } .dot.failed, .dot.blocked { background: var(--bad); border-color: var(--bad); } .dot.ambiguous { background: var(--warn); border-color: var(--warn); }
-.badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--na-soft); color: var(--na); white-space: nowrap; }
+.neg { color: var(--bad); }
+.name { font-weight: 600; color: var(--text); } a.name:hover { color: var(--accent); }
+.sub { color: var(--muted); font-size: 12.5px; }
+.pick { display: inline-flex; align-items: center; justify-content: center; width: var(--tap); height: var(--tap); margin: -8px; cursor: pointer; }
+.pick input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.cov { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.cov b { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; min-width: 34px; }
+.dots { display: inline-flex; gap: 3px; align-items: center; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: transparent; border: 1.5px solid var(--control); flex: none; }
+.dot.available { background: var(--ok); border-color: var(--ok); }
+.dot.ambiguous { background: var(--warn); border-color: var(--warn); border-radius: 1px; transform: rotate(45deg) scale(.85); }
+.dot.failed, .dot.blocked { background: var(--bad); border-color: var(--bad); border-radius: 1px; }
+.dot.not_applicable { border-style: dotted; }
+.badge { display: inline-block; font-size: 12px; line-height: 1.5; padding: 1px 8px; border-radius: 999px; background: var(--na-soft); color: var(--na); white-space: nowrap; }
 .badge.available { background: var(--ok-soft); color: var(--ok); } .badge.failed, .badge.blocked { background: var(--bad-soft); color: var(--bad); }
 .badge.ambiguous { background: var(--warn-soft); color: var(--warn); }
-.cmp { width: 18px; height: 18px; }
-.detail h1 { font-size: 24px; margin: 4px 0 2px; letter-spacing: -.01em; }
-.back { display: inline-block; margin-bottom: 8px; font-size: 14px; }
-.grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 16px; }
+.more { display: flex; justify-content: center; padding: var(--s4); }
+.empty { padding: var(--s6) var(--s4); text-align: center; color: var(--muted); }
+.empty h2 { color: var(--text); font-size: 17px; margin: 0 0 var(--s1); }
+.empty .actions { display: flex; gap: var(--s2); justify-content: center; margin-top: var(--s4); flex-wrap: wrap; }
+
+.crumbs { display: flex; gap: var(--s2); align-items: center; font-size: 14px; margin-bottom: var(--s2); min-height: 28px; }
+.detail h1 { font-size: 24px; margin: 0 0 2px; letter-spacing: -.01em; line-height: 1.25; text-wrap: balance; outline: none; }
+.headrow { display: flex; gap: var(--s3) var(--s4); justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+.actions { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); margin-top: var(--s4); }
+.tile { padding: var(--s3) var(--s4); min-width: 0; }
+.tile-l { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.tile-v { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.3; margin-top: 2px; overflow-wrap: anywhere; }
+.tile-v.small { font-size: 15px; font-weight: 600; }
+.tile-s { font-size: 12.5px; }
+.jump { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s4); }
+.grid { display: grid; grid-template-columns: 2fr 1fr; gap: var(--s4); margin-top: var(--s4); }
 .grid > * { min-width: 0; }
-.pad { padding: 16px; }
-.summary p { margin: 0 0 8px; }
-sup.ref a { font-size: 11px; margin-left: 1px; }
-h2 { font-size: 15px; margin: 0 0 10px; }
-.section { margin-top: 16px; }
-.section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.pad { padding: var(--s4); }
+.summary p { margin: 0 0 var(--s2); max-width: 75ch; }
+a.cite { display: inline-block; font-size: 11px; line-height: 1; padding: 3px 5px; margin: 0 1px; border-radius: 4px; background: var(--accent-soft); vertical-align: 2px; font-variant-numeric: tabular-nums; }
+h2 { font-size: 15px; margin: 0 0 var(--s3); }
+.section { margin-top: var(--s4); scroll-margin-top: 120px; }
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .fam { display: flex; gap: 6px; flex-wrap: wrap; }
-.claims td { font-size: 14px; }
-.claims td.field { color: var(--muted); white-space: nowrap; width: 22%; }
-.ev { font-size: 12px; color: var(--muted); }
-.ev code { font-family: var(--mono); font-size: 11.5px; }
-.claim-row:target, .claim-row.flash { background: var(--warn-soft); }
-.change { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; } .change:last-child { border: 0; }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; } .kv div:nth-child(odd) { color: var(--muted); }
-.empty { padding: 32px; text-align: center; color: var(--muted); }
-.compare-bar { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); border-radius: 999px; padding: 8px 8px 8px 16px; display: none; gap: 10px; align-items: center; box-shadow: var(--shadow); z-index: 6; }
-.compare-bar button { border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; cursor: pointer; background: var(--accent); color: #fff; }
-.theme { order: 5; }
-.stale { opacity: .65; }
-@media (max-width: 820px) {
+.claims td, .claims th { font-size: 14px; }
+.claims th.field { color: var(--muted); font-weight: 400; width: 22%; }
+.claims th.field::first-letter { text-transform: uppercase; }
+.claims td.perma { width: 36px; text-align: right; }
+.claims td.perma a { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: var(--radius-s); color: var(--muted); }
+.claims td.perma a:hover { background: var(--raised); color: var(--accent); text-decoration: none; }
+.claims.collapsed tr.extra { display: none; }
+.claim-row { scroll-margin-top: 140px; }
+.claim-row.flash { background: var(--warn-soft); box-shadow: inset 3px 0 0 var(--warn); }
+.ev { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.ev > span + span::before { content: " · "; }
+.ev code, code { font-family: var(--mono); font-size: 12px; }
+.acct { overflow-x: auto; }
+.acct td, .acct th { white-space: nowrap; }
+.acct tbody th { font-weight: 400; color: var(--muted); font-size: 14px; }
+details.more-ev > summary { cursor: pointer; padding: var(--s3) var(--s4); color: var(--accent); font-size: 14px; min-height: var(--tap); display: flex; align-items: center; }
+.change { padding: var(--s2) 0; border-bottom: 1px solid var(--line); font-size: 14px; } .change:last-child { border: 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px var(--s3); font-size: 14px; align-items: start; } .kv dt { color: var(--muted); } .kv dd { margin: 0; }
+.stale { opacity: .7; }
+.cmp-wrap { overflow-x: auto; }
+table.cmp th, table.cmp td { min-width: 150px; }
+table.cmp tbody th { position: sticky; left: 0; background: var(--surface); min-width: 120px; width: 150px; font-weight: 400; color: var(--muted); font-size: 13px; z-index: 1; }
+table.cmp thead th { text-transform: none; letter-spacing: 0; font-size: 14px; white-space: normal; vertical-align: bottom; }
+table.cmp thead th:first-child { position: sticky; left: 0; z-index: 2; }
+table.cmp tr.group th { background: var(--raised); color: var(--text); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; position: static; }
+table.cmp .top { font-weight: 700; }
+.colhead { display: flex; gap: var(--s2); justify-content: space-between; align-items: flex-start; }
+.x { all: unset; cursor: pointer; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-s); color: var(--muted); flex: none; }
+.x:hover { background: var(--raised); color: var(--bad); } .x:focus-visible { outline: 2px solid var(--accent); }
+
+.compare-bar { position: fixed; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); border-radius: 14px; padding: 8px 8px 8px 16px; display: none; gap: var(--s2); align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.25); z-index: var(--z-bar); max-width: calc(100vw - 24px); }
+.compare-bar span { font-size: 14px; white-space: nowrap; }
+.compare-bar .btn { border-color: transparent; background: transparent; color: inherit; }
+.compare-bar .btn:hover { background: rgba(127,127,127,.25); }
+.compare-bar .btn.primary { background: var(--accent); color: var(--on-accent); }
+
+@media (max-width: 1040px) { .chips { flex-basis: 100%; } table.list .hide-t { display: none; } .dots { gap: 2px; } .dot { width: 8px; height: 8px; } .cov { gap: 6px; } }
+@media (max-width: 768px) {
+  body { font-size: 16px; }
+  .bar { flex-wrap: wrap; gap: var(--s2); }
+  .brand { flex: 1 1 auto; }
+  .search { order: 3; flex-basis: 100%; }
   .grid { grid-template-columns: 1fr; }
+  .tools { flex: 1 1 100%; } .sort { flex: 1 1 auto; } .sort select { flex: 1 1 auto; min-width: 0; }
+  .legend { display: none; }
   table.list thead { display: none; }
   table.list, table.list tbody { display: block; }
-  table.list tr { display: grid; grid-template-columns: 26px 1fr 1fr; gap: 4px 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  table.list tr { display: grid; grid-template-columns: var(--tap) 1fr 1fr; gap: 4px 10px; padding: 12px; border-bottom: 1px solid var(--line); align-items: start; }
   table.list td { border: 0; padding: 0; min-width: 0; }
-  table.list td.nm { grid-column: 2 / 4; }
-  table.list td.dt { grid-column: 2 / 4; }
+  table.list td.pk { grid-row: 1 / 4; }
+  table.list td.nm, table.list td.dt { grid-column: 2 / 4; }
   table.list td[data-l="Revenue"] { grid-column: 2; }
   table.list td[data-l="Result"] { grid-column: 3; }
-  table.list td.num::before { content: attr(data-l) " "; color: var(--muted); font-size: 12px; }
+  table.list td.num::before { content: attr(data-l) " "; color: var(--muted); font-size: 12.5px; }
   table.list td.hide-m { display: none; }
   table.list td.num { text-align: left; }
-  .claims td.field { width: auto; display: block; padding-bottom: 0; border: 0; }
-  .claims tr { display: block; border-bottom: 1px solid var(--line); }
-  .claims td { display: block; }
-  .bar { gap: 8px; }
-  .brand { flex: 1 1 auto; }
-  .theme { margin-left: 0; order: 2; }
-  input[type=search] { order: 3; flex-basis: 100%; }
-  .chips { order: 4; flex-wrap: nowrap; overflow-x: auto; width: 100%; padding-bottom: 2px; }
-  .chip { white-space: nowrap; }
+  .pick { margin: -6px 0 0 -10px; }
+  .claims tr { display: grid; grid-template-columns: 1fr 36px; border-bottom: 1px solid var(--line); }
+  .claims th.field { grid-column: 1 / 3; width: auto; padding-bottom: 0; border: 0; }
+  .claims td { border: 0; min-width: 0; }
+  .detail h1 { font-size: 21px; }
+  table.cmp th, table.cmp td { min-width: 130px; }
+  table.cmp tbody th { min-width: 96px; width: 96px; }
 }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+@media print { header, .compare-bar, .toolbar, .jump, .actions, .perma { display: none !important; } .card { box-shadow: none; } .claims.collapsed tr.extra { display: table-row; } }
 </style>
 </head>
 <body>
+<a class="skip" href="#app">Skip to content</a>
 <header>
   <div class="bar">
-    <div class="brand">Signalpost <span>explorer</span></div>
-    <input id="q" type="search" placeholder="Search name, org number, municipality, industry…" aria-label="Search companies">
-    <button class="chip theme" id="theme" aria-label="Toggle colour theme">◐</button>
-    <div class="chips" role="group" aria-label="Filters">
-      <button class="chip" data-f="w" aria-pressed="false">Verified website</button>
-      <button class="chip" data-f="j" aria-pressed="false">Hiring</button>
-      <button class="chip" data-f="r" aria-pressed="false">Has accounts</button>
-      <button class="chip" data-f="c" aria-pressed="false">Changed</button>
+    <a class="brand" href="#/" aria-label="Signalpost explorer, all companies">Signalpost <span>explorer</span></a>
+    <div class="search" role="search">
+      <label class="sr-only" for="q">Search companies</label>
+      <input id="q" type="search" placeholder="Search name, org number, place, industry, leader…" autocomplete="off" spellcheck="false" aria-keyshortcuts="/">
     </div>
+    <button class="btn icon" id="theme" aria-label="Switch between light and dark theme"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
   </div>
 </header>
-<main id="app"><div class="empty">Loading…</div></main>
-<div class="compare-bar" id="cbar"><span id="ctext"></span><button id="cgo">Compare</button></div>
+<main id="app" tabindex="-1"><div class="empty">Loading…</div></main>
+<div class="sr-only" id="live" role="status" aria-atomic="true"></div>
+<div class="compare-bar" id="cbar" role="region" aria-label="Compare selection"><span id="ctext"></span><button class="btn" id="cclear">Clear</button><button class="btn primary" id="cgo">Compare</button></div>
 <script>
 const FAMILIES = {legal_identity:"Legal identity", public_brand:"Public brand", group_relationships:"Group", annual_accounts:"Accounts", filing_history:"Filings", leadership:"Leadership", registered_workplaces:"Workplaces", official_website:"Website", company_profiles:"Profiles", jobs:"Jobs", dated_activity:"Activity"};
 const SECTION_TITLES = {legal_identity:"Legal identity and public brand", annual_accounts:"Annual accounts and history", leadership_workplaces:"Leadership and registered workplaces", web_presence:"Official website and company-owned profiles", hiring_activity:"Hiring and dated public activity"};
-let rows = [], filters = new Set(), selected = new Set(), cache = {};
+const SECTION_SHORT = {legal_identity:"Identity", annual_accounts:"Accounts", leadership_workplaces:"Leadership", web_presence:"Web presence", hiring_activity:"Hiring and activity"};
+const STATE_LABEL = {available:"available", not_available:"not found", blocked:"blocked", not_applicable:"not applicable", ambiguous:"ambiguous", failed:"failed"};
+const SOURCE_LABEL = {official_registry_live:"Brønnøysund register", official_annual_accounts:"Annual accounts register", official_roles:"Register of roles", official_subunits:"Register of sub-units", official_group_structure:"Group structure register", official_role_update_log:"Role update log", official_job_register_nav:"NAV job register", registry_linked_company_website:"Company website (listed in the register)", employer_declared_homepage:"Company website (declared in a NAV ad)", registry_email_domain:"Company website (register e-mail domain)", name_derived_domain:"Company website (name-derived domain)", frozen_universe_snapshot:"Builderr universe snapshot"};
+const SCOPE_LABEL = {exact_entity_verified_by_organisation_number:"Verified: organisation number is on the site", norwegian_domain:"Verified by legal name; Norwegian domain", possibly_group_or_international:"Possibly a group or international site", page_on_third_party_site:"A page on a third-party site (chain, directory or platform)"};
+const ACCOUNT_ROWS = [["revenue","Revenue"],["operating_result","Operating result"],["profit_before_tax","Profit before tax"],["annual_result","Net result"],["assets","Total assets"],["equity","Equity"],["debt","Debt"]];
+const FILTERS = {w:["Verified website", r => r.w], j:["Hiring signal", r => (r.a||{}).jobs === "available"], x:["Company profiles", r => r.x], y:["News", r => r.y], r:["Reports revenue", r => r.r != null], c:["Changed", r => r.c]};
+const SORTS = {cov:["Coverage (most first)", r => coverage(r), "desc"], name:["Name (A–Z)", r => (r.n||"").toLowerCase(), "asc"], rev:["Revenue (highest first)", r => r.r, "desc"], res:["Net result (highest first)", r => r.p, "desc"], emp:["Employees (most first)", r => r.e, "desc"]};
+const PAGE = 100, MAX_COMPARE = 4;
+
+let rows = [], cache = {}, selected = new Set();
+let state = {q: "", f: new Set(), s: "cov", d: "desc", shown: PAGE};
+let lastKind = null, listScroll = 0;
 const $ = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const nok = v => v == null ? "—" : new Intl.NumberFormat("nb-NO", {notation: Math.abs(v) >= 1e6 ? "compact" : "standard", maximumFractionDigits: 1}).format(v);
+const human = v => String(v ?? "").replace(/_/g, " ");
 const safeUrl = u => /^https?:\/\//i.test(String(u||"")) ? String(u) : null;
 const link = (u, label) => safeUrl(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(label || u)}</a>` : esc(label || u || "");
+const host = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return String(u||""); } };
+const say = text => { $("#live").textContent = text; };
+function nok(v) {
+  if (v == null) return "—";
+  const a = Math.abs(v), sign = v < 0 ? "−" : "";
+  if (a >= 1e9) return `${sign}${(a/1e9).toFixed(1)} bn`;
+  if (a >= 1e6) return `${sign}${(a/1e6).toFixed(1)} m`;
+  if (a >= 1e4) return `${sign}${Math.round(a/1e3)} k`;
+  return sign + new Intl.NumberFormat("en-GB", {maximumFractionDigits: 0}).format(a);
+}
+const money = v => v == null ? "—" : `<span class="${v < 0 ? "neg" : ""}">${nok(v)}</span>`;
+const coverage = r => Object.keys(FAMILIES).filter(k => (r.a||{})[k] === "available").length;
+const badge = (st, label) => `<span class="badge ${esc(st)}">${esc(label ? label + ": " : "")}${esc(STATE_LABEL[st] || human(st))}</span>`;
 
 try { const t = localStorage.getItem("sp-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
 $("#theme").onclick = () => { const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; try { localStorage.setItem("sp-theme", next); } catch (e) {} };
@@ -134,44 +255,128 @@ function script(src) {
   return new Promise((resolve, reject) => { const el = document.createElement("script"); el.src = src; el.onload = resolve; el.onerror = () => reject(new Error(`missing ${src}`)); document.head.appendChild(el); });
 }
 async function load() {
-  try { await script("data/index.js"); rows = window.SP_INDEX || []; } catch (err) { $("#app").innerHTML = `<div class="empty">Could not load: ${esc(err.message)}</div>`; return; }
+  try { await script("data/index.js"); rows = window.SP_INDEX || []; }
+  catch (err) { $("#app").innerHTML = `<div class="card empty"><h2>The company data could not be loaded</h2><p>${esc(err.message)}. Keep <code>index.html</code> next to its <code>data</code> folder and reload.</p></div>`; return; }
   route();
 }
 function company(org) {
-  if (!cache[org]) cache[org] = script(`data/c/${org}.js`).then(() => window.SP_COMPANY[org]);
+  if (!cache[org]) cache[org] = script(`data/c/${org}.js`).then(() => { if (!window.SP_COMPANY[org]) throw new Error(`no profile for ${org}`); return window.SP_COMPANY[org]; });
   return cache[org];
 }
-function dots(a) { return `<span class="dots" title="${esc(Object.entries(a||{}).map(([k,v])=>`${FAMILIES[k]||k}: ${v}`).join("\n"))}">` + Object.keys(FAMILIES).map(k => `<span class="dot ${esc((a||{})[k]||"")}"></span>`).join("") + "</span>"; }
 
+// ---------- list state lives in the URL, so a filtered view can be shared and survives back/forward
+function listHash() {
+  const p = new URLSearchParams();
+  if (state.q) p.set("q", state.q);
+  if (state.f.size) p.set("f", [...state.f].join(","));
+  if (state.s !== "cov" || state.d !== "desc") { p.set("s", state.s); p.set("d", state.d); }
+  const qs = p.toString();
+  return "#/" + (qs ? "?" + qs : "");
+}
+function readListHash(h) {
+  const p = new URLSearchParams(h.split("?")[1] || "");
+  state.q = p.get("q") || "";
+  state.f = new Set((p.get("f") || "").split(",").filter(k => FILTERS[k]));
+  state.s = SORTS[p.get("s")] ? p.get("s") : "cov";
+  state.d = p.get("d") === "asc" || p.get("d") === "desc" ? p.get("d") : SORTS[state.s][2];
+  if ($("#q").value !== state.q) $("#q").value = state.q;
+}
+function listChanged(resetPaging = true) {
+  if (resetPaging) state.shown = PAGE;
+  try { history.replaceState(null, "", listHash()); } catch (e) {}
+  renderList();
+}
+function filtered() {
+  const q = state.q.trim().toLowerCase();
+  const list = rows.filter(r => (!q || [r.n, r.o, r.m, r.i, r.w, ...(r.l||[])].some(v => String(v||"").toLowerCase().includes(q))) && [...state.f].every(k => FILTERS[k][1](r)));
+  const get = SORTS[state.s][1], dir = state.d === "asc" ? 1 : -1;
+  return list.sort((a, b) => { const x = get(a), y = get(b); if (x == null || x === "") return (y == null || y === "") ? 0 : 1; if (y == null || y === "") return -1; return (x < y ? -1 : x > y ? 1 : 0) * dir || String(a.n).localeCompare(String(b.n)); });
+}
+function dots(a) {
+  const n = Object.keys(FAMILIES).filter(k => (a||{})[k] === "available").length, total = Object.keys(FAMILIES).length;
+  const detail = Object.entries(FAMILIES).map(([k, label]) => `${label}: ${STATE_LABEL[(a||{})[k]] || "not checked"}`).join("\n");
+  return `<span class="cov" title="${esc(detail)}"><b aria-hidden="true">${n}/${total}</b><span class="sr-only">${n} of ${total} field families available</span><span class="dots" aria-hidden="true">${Object.keys(FAMILIES).map(k => `<span class="dot ${esc((a||{})[k]||"")}"></span>`).join("")}</span></span>`;
+}
+function sortTh(key, label, cls = "") {
+  const active = state.s === key;
+  return `<th class="${cls}" ${active ? `aria-sort="${state.d === "asc" ? "ascending" : "descending"}"` : ""}><button class="sortbtn" data-sort="${key}">${label}</button></th>`;
+}
 function renderList() {
-  const q = $("#q").value.trim().toLowerCase();
-  const list = rows.filter(r => (!q || [r.n, r.o, r.m, r.i].some(v => String(v||"").toLowerCase().includes(q)))
-    && (!filters.has("w") || r.w) && (!filters.has("j") || r.j) && (!filters.has("r") || r.r != null) && (!filters.has("c") || r.c));
-  const shown = list.slice(0, 300);
-  $("#app").innerHTML = `<p class="meta"><span>${list.length} of ${rows.length} companies${list.length > 300 ? " (showing 300 — refine search)" : ""}</span><span>Coverage dots: ${Object.values(FAMILIES).join(" · ")}</span></p>
-  <div class="card"><table class="list"><thead><tr><th></th><th>Company</th><th class="hide-m">Industry</th><th class="num">Revenue</th><th class="num">Result</th><th class="num hide-m">Employees</th><th class="hide-m">Signals</th><th>Coverage</th></tr></thead><tbody>
-  ${shown.map(r => `<tr data-o="${esc(r.o)}"><td><input type="checkbox" class="cmp" aria-label="Select ${esc(r.n)} to compare" data-o="${esc(r.o)}" ${selected.has(r.o) ? "checked" : ""}></td>
-    <td class="nm"><div class="name">${esc(r.n)}</div><div class="sub">${esc(r.o)} · ${esc(r.f||"")} · ${esc(r.m||"")}</div></td>
-    <td class="hide-m sub">${esc(r.i||"—")}</td><td class="num" data-l="Revenue">${nok(r.r)}</td><td class="num" data-l="Result">${nok(r.p)}</td><td class="num hide-m">${r.e ?? "—"}</td>
-    <td class="hide-m">${r.w ? '<span class="badge available">web</span> ' : ""}${r.j ? `<span class="badge available">${r.j} job${r.j>1?"s":""}</span> ` : ""}${r.c ? `<span class="badge ambiguous">${r.c} change${r.c>1?"s":""}</span>` : ""}</td>
+  const list = filtered(), shown = list.slice(0, state.shown);
+  const counts = Object.fromEntries(Object.entries(FILTERS).map(([k, [, test]]) => [k, rows.filter(test).length]));
+  const active = [...state.f].map(k => FILTERS[k][0]);
+  const emptyHtml = `<div class="empty"><h2>No companies match</h2><p>${state.q ? `Nothing matches “${esc(state.q)}”` : "Nothing matches"}${active.length ? ` with ${esc(active.join(", "))}` : ""}. Try a shorter name, an organisation number, or fewer filters.</p>
+    <div class="actions">${state.q ? '<button class="btn" data-clear="q">Clear search</button>' : ""}${active.length ? '<button class="btn" data-clear="f">Clear filters</button>' : ""}</div></div>`;
+  $("#app").innerHTML = `<h1 class="sr-only">Companies</h1>
+  <div class="toolbar">
+    <div class="chips" role="group" aria-label="Filters">${Object.entries(FILTERS).map(([k, [label]]) => `<button class="chip" data-f="${k}" aria-pressed="${state.f.has(k)}">${label} <span class="n">${counts[k]}</span></button>`).join("")}</div>
+    <div class="tools"><label class="sort">Sort <select id="sort" aria-label="Sort companies by">${Object.entries(SORTS).map(([k, [label]]) => `<option value="${k}" ${state.s === k ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    <button class="btn" id="csv" ${list.length ? "" : "disabled"}>Export CSV</button></div>
+  </div>
+  <p class="meta"><span>${list.length === rows.length ? `${rows.length} companies` : `${list.length} of ${rows.length} companies`}${selected.size ? ` · ${selected.size} selected to compare` : ""}</span>
+    <span class="legend" aria-hidden="true">Coverage <span><span class="dot available"></span>available</span><span><span class="dot ambiguous"></span>ambiguous</span><span><span class="dot failed"></span>failed or blocked</span><span><span class="dot"></span>not found</span></span></p>
+  <div class="card">${list.length ? `<table class="list"><thead><tr><th><span class="sr-only">Compare</span></th>${sortTh("name", "Company")}<th class="hide-m hide-t">Industry</th>${sortTh("rev", "Revenue (NOK)", "num")}${sortTh("res", "Net result", "num")}${sortTh("emp", "Employees", "num hide-m")}<th class="hide-m hide-t">Signals</th>${sortTh("cov", "Coverage")}</tr></thead><tbody>
+  ${shown.map(r => `<tr data-o="${esc(r.o)}"><td class="pk"><label class="pick"><input type="checkbox" class="cmp" aria-label="Select ${esc(r.n)} to compare" data-o="${esc(r.o)}" ${selected.has(r.o) ? "checked" : ""}></label></td>
+    <td class="nm"><a class="name" href="#/c/${esc(r.o)}">${esc(r.n)}</a><div class="sub">${esc([r.o, r.f, r.m].filter(Boolean).join(" · "))}</div></td>
+    <td class="hide-m hide-t sub">${esc(r.i||"—")}</td><td class="num" data-l="Revenue">${money(r.r)}</td><td class="num" data-l="Result">${money(r.p)}</td><td class="num hide-m">${r.e ?? "—"}</td>
+    <td class="hide-m hide-t">${[r.w && '<span class="badge available">website</span>', r.j && `<span class="badge available">${r.j} open job${r.j>1?"s":""}</span>`, r.y && `<span class="badge">${r.y} news</span>`, r.c && `<span class="badge ambiguous">${r.c} change${r.c>1?"s":""}</span>`].filter(Boolean).join(" ") || '<span class="sub">—</span>'}</td>
     <td class="dt">${dots(r.a)}</td></tr>`).join("")}
-  </tbody></table>${list.length ? "" : '<div class="empty">No companies match.</div>'}</div>`;
-  $("#app").querySelectorAll("tbody tr").forEach(tr => tr.onclick = e => { if (e.target.classList.contains("cmp")) return; location.hash = `#/c/${tr.dataset.o}`; });
-  $("#app").querySelectorAll(".cmp").forEach(cb => cb.onchange = () => { cb.checked ? selected.add(cb.dataset.o) : selected.delete(cb.dataset.o); if (selected.size > 4) { selected.delete(cb.dataset.o); cb.checked = false; } updateBar(); });
+  </tbody></table>${list.length > shown.length ? `<div class="more"><button class="btn" id="more">Show ${Math.min(PAGE, list.length - shown.length)} more (${list.length - shown.length} remaining)</button></div>` : ""}` : emptyHtml}</div>`;
+  const app = $("#app");
+  $$("tbody tr", app).forEach(tr => tr.onclick = e => { if (e.target.closest("a, label, input")) return; location.hash = `#/c/${tr.dataset.o}`; });
+  $$(".cmp", app).forEach(cb => cb.onchange = () => { if (!toggleCompare(cb.dataset.o, cb.checked)) cb.checked = false; });
+  $$(".chip[data-f]", app).forEach(b => b.onclick = () => { const f = b.dataset.f; state.f.has(f) ? state.f.delete(f) : state.f.add(f); listChanged(); $(`.chip[data-f="${f}"]`)?.focus(); });
+  $$(".sortbtn", app).forEach(b => b.onclick = () => { const k = b.dataset.sort; state.d = state.s === k ? (state.d === "asc" ? "desc" : "asc") : SORTS[k][2]; state.s = k; listChanged(); $(`.sortbtn[data-sort="${k}"]`)?.focus(); });
+  $("#sort").onchange = e => { state.s = e.target.value; state.d = SORTS[state.s][2]; listChanged(); $("#sort").focus(); };
+  $$("[data-clear]", app).forEach(b => b.onclick = () => { if (b.dataset.clear === "q") { state.q = ""; $("#q").value = ""; } else state.f.clear(); listChanged(); });
+  if ($("#more")) $("#more").onclick = () => { state.shown += PAGE; const y = scrollY; renderList(); scrollTo(0, y); };
+  $("#csv").onclick = () => exportCsv(list);
+  say(`${list.length} of ${rows.length} companies shown`);
   updateBar();
 }
-function updateBar() { const bar = $("#cbar"); bar.style.display = selected.size >= 2 ? "flex" : "none"; $("#ctext").textContent = `${selected.size} selected`; }
-$("#cgo").onclick = () => location.hash = `#/compare/${[...selected].join(",")}`;
+function exportCsv(list) {
+  const cols = [["organisation_number", r => r.o], ["legal_name", r => r.n], ["legal_form", r => r.f], ["municipality", r => r.m], ["industry", r => r.i], ["registered_employees", r => r.e], ["revenue_nok", r => r.r], ["net_result_nok", r => r.p], ["verified_website", r => r.w], ["open_jobs", r => r.j], ["company_profiles", r => r.x], ["news_items", r => r.y], ["changes", r => r.c], ["families_available", r => coverage(r)]];
+  const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const text = [cols.map(c => c[0]).join(","), ...list.map(r => cols.map(c => cell(c[1](r))).join(","))].join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + text], {type: "text/csv;charset=utf-8"}));
+  a.download = "signalpost-companies.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  say(`Exported ${list.length} companies as CSV`);
+}
 
+// ---------- compare selection
+function toggleCompare(org, on) {
+  if (on && selected.size >= MAX_COMPARE && !selected.has(org)) { $("#ctext").textContent = `Up to ${MAX_COMPARE} companies`; say(`You can compare up to ${MAX_COMPARE} companies. Remove one first.`); return false; }
+  on ? selected.add(org) : selected.delete(org);
+  updateBar();
+  return true;
+}
+function updateBar() {
+  const bar = $("#cbar"), show = selected.size >= 1 && lastKind !== "compare";
+  bar.style.display = show ? "flex" : "none";
+  $("#app").classList.toggle("has-bar", show);
+  $("#ctext").textContent = selected.size === 1 ? "1 selected · pick one more" : `${selected.size} selected`;
+  $("#cgo").disabled = selected.size < 2;
+}
+$("#cgo").onclick = () => { if (selected.size >= 2) location.hash = `#/compare/${[...selected].join(",")}`; };
+$("#cclear").onclick = () => { selected.clear(); updateBar(); $$(".cmp").forEach(cb => cb.checked = false); const b = $("#addcmp"); if (b) { b.setAttribute("aria-pressed", "false"); b.textContent = "Add to compare"; } say("Compare selection cleared"); };
+
+// ---------- company page
 function fmtValue(c) {
   const v = c.value;
+  if (c.field === "website_scope") return esc(SCOPE_LABEL[v] || human(v));
+  if (c.field === "share_capital" && typeof v === "number") return `NOK ${new Intl.NumberFormat("en-GB").format(v)}`;
   if (v && typeof v === "object" && !Array.isArray(v)) {
-    if ("amount" in v) return `${nok(v.amount)} ${esc(v.currency||"")}`;
+    if ("amount" in v) return `${esc(v.currency||"NOK")} ${money(v.amount)} <span class="sub">${esc(new Intl.NumberFormat("en-GB").format(v.amount))}</span>`;
     if (c.field === "open_job") return `${link(v.public_url, v.title)}<div class="sub">${esc([v.published && "published " + v.published.slice(0,10), v.expires && "expires " + v.expires.slice(0,10), (v.work_locations||[]).map(l => l.city || l.municipal).filter(Boolean).join(", ")].filter(Boolean).join(" · "))}</div>`;
+    if (c.field === "previous_legal_name") return `${esc(v.name)} <span class="sub">${esc([v.from, v.to].filter(Boolean).join(" to "))}</span>`;
+    if (c.field === "registry_declared_site") return `${link(v.url)}<div class="sub">${esc(v.relation||"")}</div>`;
     if ("date" in v && "title" in v) return `${esc(v.date || v.year || "")} — ${v.url ? link(v.url, v.title) : esc(v.title)}`;
-    if ("role" in v) return `${esc(v.name)} <span class="sub">${esc(v.role)}</span>`;
+    if ("role" in v) return `${esc(v.name)} <span class="sub">${esc(v.role)}${v.organisation_number ? " · " + esc(v.organisation_number) : ""}</span>`;
     if (c.family === "registered_workplaces") return `${esc(v.name)} <span class="sub">${esc(v.address||"")}${v.registered_employees ? " · " + esc(v.registered_employees) + " employees" : ""}</span>`;
-    if (c.family === "group_relationships") return `${esc(v.relation)}: ${esc(v.name)} <span class="sub">${esc(v.organisation_number)} · ${esc(v.ownership_basis||"")}</span>`;
+    if (c.family === "group_relationships") return `${esc(v.relation)}: ${/^\d{9}$/.test(v.organisation_number||"") && rows.some(r => r.o === v.organisation_number) ? `<a href="#/c/${esc(v.organisation_number)}">${esc(v.name)}</a>` : esc(v.name)} <span class="sub">${esc(v.organisation_number)} · ${esc(v.ownership_basis||"")}</span>`;
     if ("beskrivelse" in v) return `${esc(v.beskrivelse)} <span class="sub">${esc(v.kode)}</span>`;
     return `<code>${esc(JSON.stringify(v))}</code>`;
   }
@@ -180,64 +385,148 @@ function fmtValue(c) {
   return esc(v);
 }
 function evidenceHtml(c, evidence) {
-  return (c.evidence_ids||[]).map(id => { const e = evidence[id]; if (!e) return ""; return `<div class="ev">${link(e.final_url || e.source_url, (e.source_class||"source").replace(/_/g," "))} · retrieved ${esc((e.retrieved_at||"").slice(0,16).replace("T"," "))} · <code title="${esc(e.content_sha256||"")}">${esc((e.content_sha256||"").slice(0,10))}</code>${c.locator ? ` · <code>${esc(c.locator)}</code>` : ""}${e.from_previous_run ? " · from previous run" : ""}</div>`; }).join("");
+  const lines = (c.evidence_ids||[]).map(id => { const e = evidence[id]; if (!e) return ""; const url = e.final_url || e.source_url;
+    return `<div class="ev"><span>Source: ${link(url, SOURCE_LABEL[e.source_class] || human(e.source_class || "source"))}${safeUrl(url) ? ` <span class="sub">(${esc(host(url))})</span>` : ""}</span><span>retrieved ${esc((e.retrieved_at||"").slice(0,16).replace("T"," "))} UTC</span>${e.content_sha256 ? `<span title="SHA-256 of the fetched content: ${esc(e.content_sha256)}">sha256 <code>${esc(e.content_sha256.slice(0,10))}</code></span>` : ""}${c.locator ? `<span>at <code>${esc(c.locator)}</code></span>` : ""}${e.from_previous_run ? "<span>from previous run</span>" : ""}</div>`; }).join("");
+  return lines + (c.claim_span ? `<div class="ev"><span>Proof: ${esc(c.claim_span)}</span></div>` : "") + (typeof c.confidence === "number" && c.confidence < 1 ? `<div class="ev"><span>Confidence ${Math.round(c.confidence*100)}%</span></div>` : "");
 }
-
+function claimsTable(org, claims, evidence, limit = 8) {
+  const collapsed = claims.length > limit + 2;
+  return `<table class="claims ${collapsed ? "collapsed" : ""}"><tbody>${claims.map((c, i) => `<tr class="claim-row ${c.stale ? "stale" : ""} ${collapsed && i >= limit ? "extra" : ""}" id="${esc(c.claim_id)}"><th scope="row" class="field">${esc(human(c.field))}${c.reporting_period ? `<div class="sub">${esc(c.reporting_period.replace("..", " to "))}</div>` : ""}</th><td>${fmtValue(c)}${c.stale ? ' <span class="badge">not re-verified this run</span>' : ""}${evidenceHtml(c, evidence)}</td><td class="perma"><a href="#/c/${esc(org)}/${esc(c.claim_id)}" aria-label="Link to this fact: ${esc(human(c.field))}" title="Link to this fact">#</a></td></tr>`).join("")}</tbody></table>${collapsed ? `<div class="more"><button class="btn" data-expand aria-expanded="false">Show all ${claims.length} facts</button></div>` : ""}`;
+}
+function accountsMatrix(org, claims) {
+  const acct = claims.filter(c => c.family === "annual_accounts" && c.value && typeof c.value === "object" && "amount" in c.value && !c.stale);
+  const periods = [...new Set(acct.map(c => c.reporting_period))].filter(Boolean).sort().reverse();
+  if (!periods.length) return "";
+  const at = (field, period) => acct.find(c => c.field === field && c.reporting_period === period);
+  return `<div class="acct"><table><caption class="sr-only">Filed annual accounts by year, in NOK. Each figure links to its evidence.</caption><thead><tr><th scope="col">NOK</th>${periods.map(p => `<th scope="col" class="num" title="${esc(p.replace("..", " to "))}">${esc(p.slice(-10, -6))}</th>`).join("")}</tr></thead>
+    <tbody>${ACCOUNT_ROWS.filter(([f]) => periods.some(p => at(f, p))).map(([f, label]) => `<tr><th scope="row">${label}</th>${periods.map(p => { const c = at(f, p); return `<td class="num">${c ? `<a class="src" href="#/c/${esc(org)}/${esc(c.claim_id)}" title="Show evidence">${money(c.value.amount)}</a>` : "—"}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
 async function renderCompany(org) {
   const env = await company(org);
   const evidence = Object.fromEntries((env.evidence||[]).map(e => [e.evidence_id, e]));
-  const claimsById = Object.fromEntries((env.claims||[]).map(c => [c.claim_id, c]));
+  const claims = env.claims || [];
+  const first = (family, field) => claims.find(c => c.family === family && c.field === field && !c.stale);
+  const latest = field => claims.filter(c => c.family === "annual_accounts" && c.field === field && !c.stale).sort((a, b) => (b.reporting_period||"").localeCompare(a.reporting_period||""))[0];
   const s = env.summary || {};
-  const summary = (s.sentences||[]).map(x => `${esc(x.text)}<sup class="ref">${x.claim_ids.slice(0,4).map((id,i) => `<a href="#/c/${esc(org)}/${esc(id)}">[${i+1}]</a>`).join("")}</sup>`).join(" ");
+  const summary = (s.sentences||[]).map(x => `${esc(x.text)}${(x.claim_ids||[]).slice(0,4).map((id, i) => `<a class="cite" href="#/c/${esc(org)}/${esc(id)}" aria-label="Evidence ${i+1} for this sentence">${i+1}</a>`).join("")}`).join(" ");
   const bySection = {};
-  (env.claims||[]).forEach(c => (bySection[c.section] = bySection[c.section] || []).push(c));
-  const changes = env.changes || [];
-  const log = env.change_log || [];
-  $("#app").innerHTML = `<div class="detail"><a class="back" href="#/">← All companies</a>
-    <h1>${esc(env.legal_name)}</h1><div class="sub">Org. no. ${esc(env.organisation_number)} · run ${esc(env.run?.run_id)} · ${esc((env.run?.completed_at||"").slice(0,10))} · <span class="badge ${esc(env.state)}">${esc(env.state)}</span></div>
-    <div class="grid">
-      <div class="card pad summary"><h2>Summary</h2><p>${summary || "No supported facts."}</p>${s.changes_text ? `<p><strong>${esc(s.changes_text)}</strong></p>` : ""}${s.unknowns_text ? `<p class="sub">${esc(s.unknowns_text)}</p>` : ""}</div>
-      <div class="card pad"><h2>Changes since previous run</h2>${changes.length ? changes.map(ch => `<div class="change"><span class="badge ${ch.material ? "ambiguous" : ""}">${esc(ch.change_type.replace(/_/g," "))}</span> ${esc(FAMILIES[ch.family]||ch.family)}<div class="sub">${esc(JSON.stringify(ch.previous_value ?? "—")).slice(0,120)} → ${esc(JSON.stringify(ch.current_value ?? "—")).slice(0,120)}</div></div>`).join("") : `<p class="sub">${env.refresh?.mode === "diff" ? "No changes detected." : "First observation — no previous run."}</p>`}
-      ${log.length > changes.length ? `<p class="sub">${log.length} changes recorded across all runs.</p>` : ""}
-      <h2 style="margin-top:14px">Field states</h2><div class="kv">${Object.entries(env.availability||{}).map(([k,v]) => `<div>${esc(FAMILIES[k]||k)}</div><div><span class="badge ${esc(v)}">${esc(v)}</span></div>`).join("")}</div></div>
+  claims.forEach(c => (bySection[c.section] = bySection[c.section] || []).push(c));
+  (bySection.hiring_activity || []).sort((a, b) => String(b.effective_date || (b.value||{}).date || "").localeCompare(String(a.effective_date || (a.value||{}).date || "")));
+  const changes = env.changes || [], log = env.change_log || [];
+  const tile = (label, valueHtml, claim, small) => `<div class="card tile"><div class="tile-l">${label}</div><div class="tile-v ${small ? "small" : ""}">${valueHtml}</div>${claim ? `<a class="tile-s" href="#/c/${esc(org)}/${esc(claim.claim_id)}">Show evidence</a>` : ""}</div>`;
+  const rev = latest("revenue"), res = latest("annual_result"), eq = latest("equity"), emp = first("legal_identity", "registered_employees"), founded = first("legal_identity", "founded_date"), web = first("official_website", "official_website");
+  const year = c => c && c.reporting_period ? ` <span class="sub">${esc(c.reporting_period.slice(-10, -6))}</span>` : "";
+  const states = Object.values(env.sections||{}).flatMap(sec => Object.entries(sec.fields||{}));
+  const inSel = selected.has(org);
+  $("#app").innerHTML = `<article class="detail">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="${listHash()}">← All companies</a></nav>
+    <div class="headrow"><div><h1 tabindex="-1">${esc(env.legal_name || org)}</h1>
+      <div class="sub">Org. no. ${esc(env.organisation_number)} · ${badge(env.state)} · run ${esc(env.run?.run_id)} · ${esc((env.run?.completed_at||"").slice(0,10))}</div></div>
+      <div class="actions"><button class="btn" id="addcmp" aria-pressed="${inSel}">${inSel ? "Added to compare" : "Add to compare"}</button>
+      <a class="btn" href="https://virksomhet.brreg.no/nb/oppslag/enheter/${esc(org)}" target="_blank" rel="noopener noreferrer">Open in Brønnøysund register</a></div></div>
+    <div class="tiles">
+      ${tile("Revenue" + year(rev), rev ? "NOK " + money(rev.value.amount) : "—", rev)}
+      ${tile("Net result" + year(res), res ? "NOK " + money(res.value.amount) : "—", res)}
+      ${tile("Equity" + year(eq), eq ? "NOK " + money(eq.value.amount) : "—", eq)}
+      ${tile("Employees", emp ? esc(emp.value) : "—", emp)}
+      ${tile("Founded", founded ? esc(founded.value) : "—", founded, true)}
+      ${tile("Website", web ? link(web.value, host(web.value)) : badge(env.availability?.official_website || "not_available"), web, true)}
     </div>
-    ${Object.entries(env.sections||{}).map(([key, sec]) => `<div class="card section"><div class="section-head"><h2 style="margin:0">${esc(SECTION_TITLES[key]||sec.title)}</h2><div class="fam">${Object.entries(sec.fields||{}).map(([f, st]) => `<span class="badge ${esc(st.state)}" title="${esc(st.reason||"")}">${esc(FAMILIES[f]||f)}: ${esc(st.state)}</span>`).join("")}</div></div>
-      ${(bySection[key]||[]).length ? `<table class="claims"><tbody>${bySection[key].map(c => `<tr class="claim-row ${c.stale ? "stale" : ""}" id="${esc(c.claim_id)}"><td class="field">${esc(c.field.replace(/_/g," "))}${c.reporting_period ? `<div class="sub">${esc(c.reporting_period)}</div>` : ""}</td><td>${fmtValue(c)}${c.stale ? ' <span class="badge">not re-verified this run</span>' : ""}${evidenceHtml(c, evidence)}</td></tr>`).join("")}</tbody></table>`
-        : `<div class="pad sub">${Object.values(sec.fields||{}).map(st => esc(st.reason||st.state)).filter(Boolean).join(" · ")}</div>`}</div>`).join("")}
-  </div>`;
+    <nav class="jump" aria-label="Sections on this page">${Object.keys(env.sections||{}).map(key => `<button class="chip" data-jump="sec-${esc(key)}">${esc(SECTION_SHORT[key] || key)} <span class="n">${(bySection[key]||[]).length}</span></button>`).join("")}</nav>
+    <div class="grid">
+      <section class="card pad summary" aria-labelledby="h-sum"><h2 id="h-sum">Summary</h2><p>${summary || "No supported facts."}</p>${s.changes_text ? `<p><strong>${esc(s.changes_text)}</strong></p>` : ""}${s.unknowns_text ? `<p class="sub">${esc(s.unknowns_text)}</p>` : ""}<p class="sub">Numbers in the text link to the evidence for that sentence.</p></section>
+      <section class="card pad" aria-labelledby="h-chg"><h2 id="h-chg">Changes since previous run</h2>${changes.length ? changes.map(ch => `<div class="change"><span class="badge ${ch.material ? "ambiguous" : ""}">${esc(human(ch.change_type))}</span> ${esc(FAMILIES[ch.family]||ch.family)}<div class="sub">${esc(JSON.stringify(ch.previous_value ?? "—")).slice(0,120)} → ${esc(JSON.stringify(ch.current_value ?? "—")).slice(0,120)}</div></div>`).join("") : `<p class="sub">${env.refresh?.mode === "diff" ? `No changes since run ${esc(env.refresh.previous_run_id || "")}.` : "First observation; there is no previous run."}</p>`}
+      ${log.length > changes.length ? `<p class="sub">${log.length} changes recorded across all runs.</p>` : ""}
+      <h2 style="margin-top:16px">Field states</h2><dl class="kv">${states.map(([f, st]) => `<dt>${esc(FAMILIES[f]||human(f))}</dt><dd>${badge(st.state)}${st.reason && st.state !== "available" ? `<div class="sub">${esc(st.reason)}</div>` : ""}</dd>`).join("")}</dl></section>
+    </div>
+    ${Object.entries(env.sections||{}).map(([key, sec]) => { const list = bySection[key] || [], matrix = key === "annual_accounts" ? accountsMatrix(org, list) : "";
+      const body = !list.length ? `<div class="pad sub">${Object.values(sec.fields||{}).map(st => esc(st.reason || STATE_LABEL[st.state] || st.state)).filter(Boolean).join(" · ")}</div>`
+        : matrix ? `${matrix}<details class="more-ev"><summary>Evidence for all ${list.length} account facts</summary>${claimsTable(org, list, evidence, 1e9)}</details>` : claimsTable(org, list, evidence);
+      return `<section class="card section" id="sec-${esc(key)}" aria-labelledby="h-${esc(key)}"><div class="section-head"><h2 style="margin:0" id="h-${esc(key)}">${esc(SECTION_TITLES[key]||sec.title)}</h2><div class="fam">${Object.entries(sec.fields||{}).map(([f, st]) => badge(st.state, FAMILIES[f]||human(f))).join("")}</div></div>${body}</section>`; }).join("")}
+  </article>`;
+  const app = $("#app");
+  $("#addcmp").onclick = e => { const on = !selected.has(org); if (!toggleCompare(org, on)) return; e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.textContent = on ? "Added to compare" : "Add to compare"; say(on ? "Added to compare" : "Removed from compare"); };
+  $$("[data-jump]", app).forEach(b => b.onclick = () => { const el = document.getElementById(b.dataset.jump); if (el) { el.scrollIntoView({block: "start"}); $("h2", el)?.setAttribute("tabindex", "-1"); $("h2", el)?.focus({preventScroll: true}); } });
+  $$("[data-expand]", app).forEach(b => b.onclick = () => { b.closest(".section").querySelector("table.claims").classList.remove("collapsed"); b.parentElement.remove(); });
+  updateBar();
+}
+function revealClaim(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const d = el.closest("details"); if (d) d.open = true;
+  const t = el.closest("table.collapsed"); if (t) { t.classList.remove("collapsed"); t.parentElement.querySelector("[data-expand]")?.parentElement.remove(); }
+  $$(".claim-row.flash").forEach(r => r.classList.remove("flash"));
+  el.classList.add("flash");
+  el.scrollIntoView({block: "center"});
 }
 
+// ---------- compare page
 async function renderCompare(orgs) {
   const envs = await Promise.all(orgs.map(company));
   const pick = (env, family, field) => (env.claims||[]).filter(c => c.family === family && c.field === field && !c.stale);
-  const latest = (env, field) => { const cs = pick(env, "annual_accounts", field); if (!cs.length) return "—"; const c = cs.sort((a,b) => (b.reporting_period||"").localeCompare(a.reporting_period||""))[0]; return nok(c.value.amount); };
-  const lines = [
-    ["Org. no.", e => esc(e.organisation_number)], ["Legal form", e => esc(pick(e,"legal_identity","legal_form")[0]?.value || "—")],
-    ["Municipality", e => esc(pick(e,"legal_identity","municipality")[0]?.value || "—")], ["Industry", e => esc(pick(e,"legal_identity","industry")[0]?.value?.beskrivelse || "—")],
-    ["Founded", e => esc(pick(e,"legal_identity","founded_date")[0]?.value || "—")], ["Registered employees", e => esc(pick(e,"legal_identity","registered_employees")[0]?.value ?? "—")],
-    ["Revenue", e => latest(e,"revenue")], ["Operating result", e => latest(e,"operating_result")], ["Net result", e => latest(e,"annual_result")], ["Equity", e => latest(e,"equity")],
-    ["CEO", e => esc(pick(e,"leadership","role").find(c => c.value.role_code === "DAGL")?.value.name || "—")],
-    ["Chair", e => esc(pick(e,"leadership","role").find(c => c.value.role_code === "LEDE")?.value.name || "—")],
-    ["Workplaces", e => pick(e,"registered_workplaces","registered_workplace").length || "—"],
-    ["Website", e => { const w = pick(e,"official_website","official_website")[0]; return w ? link(w.value) : `<span class="badge">${esc(e.availability?.official_website)}</span>`; }],
-    ["Open jobs", e => pick(e,"jobs","open_job").length || (pick(e,"jobs","careers_page")[0] ? link(pick(e,"jobs","careers_page")[0].value, "careers page") : `<span class="badge">${esc(e.availability?.jobs)}</span>`)],
-    ["Changes", e => (e.changes||[]).length],
+  const latest = (env, field) => pick(env, "annual_accounts", field).sort((a, b) => (b.reporting_period||"").localeCompare(a.reporting_period||""))[0];
+  const src = (env, c, html) => c ? `<a class="src" href="#/c/${esc(env.organisation_number)}/${esc(c.claim_id)}" title="Show evidence">${html}</a>` : html;
+  const text = (family, field, fn = c => esc(c.value)) => env => { const c = pick(env, family, field)[0]; return {html: c ? src(env, c, fn(c)) : "—"}; };
+  const amount = field => env => { const c = latest(env, field); return {html: c ? src(env, c, money(c.value.amount)) : "—", n: c ? c.value.amount : null}; };
+  const role = code => env => { const c = pick(env, "leadership", "role").find(c => c.value.role_code === code); return {html: c ? src(env, c, esc(c.value.name)) : "—"}; };
+  const groups = [
+    ["Identity", [["Org. no.", env => ({html: esc(env.organisation_number)})], ["Legal form", text("legal_identity", "legal_form")], ["Municipality", text("legal_identity", "municipality")],
+      ["Industry", text("legal_identity", "industry", c => esc(c.value?.beskrivelse || "—"))], ["Founded", text("legal_identity", "founded_date")]]],
+    ["Latest filed accounts (NOK)", [["Financial year", env => { const c = latest(env, "revenue") || latest(env, "annual_result"); return {html: c ? `<span title="${esc(c.reporting_period.replace("..", " to "))}">${esc(c.reporting_period.slice(-10, -6))}</span>` : "—"}; }],
+      ["Revenue", amount("revenue"), true], ["Operating result", amount("operating_result"), true], ["Net result", amount("annual_result"), true], ["Equity", amount("equity"), true]]],
+    ["People", [["Registered employees", env => { const c = pick(env, "legal_identity", "registered_employees")[0]; return {html: c ? src(env, c, esc(c.value)) : "—", n: c ? Number(c.value) : null}; }, true],
+      ["CEO", role("DAGL")], ["Chair", role("LEDE")], ["Workplaces", env => ({html: pick(env, "registered_workplaces", "registered_workplace").length || "—"})]]],
+    ["Presence and activity", [["Website", env => { const c = pick(env, "official_website", "official_website")[0]; return {html: c ? `${link(c.value, host(c.value))} <span class="sub">${src(env, c, "evidence")}</span>` : badge(env.availability?.official_website || "not_available")}; }],
+      ["Profiles", env => { const cs = (env.claims||[]).filter(c => c.family === "company_profiles" && !c.stale); return {html: cs.length ? cs.map(c => link(c.value, c.field)).join(", ") : badge(env.availability?.company_profiles || "not_available")}; }],
+      ["Open jobs", env => { const n = pick(env, "jobs", "open_job").length, cp = pick(env, "jobs", "careers_page")[0]; return {html: n || (cp ? link(cp.value, "careers page") : badge(env.availability?.jobs || "not_available"))}; }],
+      ["Changes since last run", env => ({html: (env.changes||[]).length})]]],
   ];
-  $("#app").innerHTML = `<a class="back" href="#/">← All companies</a><div class="card" style="overflow-x:auto"><table><thead><tr><th></th>${envs.map(e => `<th><a href="#/c/${esc(e.organisation_number)}">${esc(e.legal_name)}</a></th>`).join("")}</tr></thead>
-    <tbody>${lines.map(([label, fn]) => `<tr style="cursor:default"><td class="sub">${label}</td>${envs.map(e => `<td>${fn(e)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  $("#app").innerHTML = `<nav class="crumbs" aria-label="Breadcrumb"><a href="${listHash()}">← All companies</a></nav>
+    <h1 class="sr-only">Compare ${envs.length} companies</h1>
+    <p class="meta"><span>Comparing ${envs.length} companies. Values link to their evidence; the highest figure in a row is bold.</span></p>
+    <div class="card cmp-wrap"><table class="cmp"><thead><tr><th scope="col"><span class="sr-only">Field</span></th>${envs.map(e => `<th scope="col"><div class="colhead"><a href="#/c/${esc(e.organisation_number)}">${esc(e.legal_name)}</a>${envs.length > 2 ? `<button class="x" data-remove="${esc(e.organisation_number)}" aria-label="Remove ${esc(e.legal_name)} from comparison">✕</button>` : ""}</div></th>`).join("")}</tr></thead>
+    <tbody>${groups.map(([title, lines]) => `<tr class="group"><th colspan="${envs.length + 1}" scope="colgroup">${title}</th></tr>` + lines.map(([label, fn, numeric]) => { const cells = envs.map(fn); const max = numeric ? Math.max(...cells.map(c => c.n ?? -Infinity)) : null;
+      return `<tr><th scope="row">${label}</th>${cells.map(c => { const top = numeric && envs.length > 1 && c.n != null && c.n === max && cells.filter(x => x.n === max).length === 1; return `<td class="${top ? "top" : ""}">${c.html}${top ? '<span class="sr-only"> (highest)</span>' : ""}</td>`; }).join("")}</tr>`; }).join("")).join("")}</tbody></table></div>`;
+  $$("[data-remove]").forEach(b => b.onclick = () => { selected.delete(b.dataset.remove); location.hash = `#/compare/${orgs.filter(o => o !== b.dataset.remove).join(",")}`; });
+  updateBar();
 }
 
+// ---------- routing
 async function route() {
-  const h = location.hash.slice(1);
-  let m;
+  const h = location.hash.slice(1), prev = lastKind;
+  if (prev === "list") listScroll = scrollY;  // the list is still on screen here, so this is where the reader left it
+  let m, kind = "list";
   try {
-    if ((m = h.match(/^\/c\/(\d{9})(?:\/(cl-[0-9a-f]+))?/))) { await renderCompany(m[1]); if (m[2]) { const el = document.getElementById(m[2]); if (el) { el.scrollIntoView({block: "center"}); el.classList.add("flash"); } } else window.scrollTo(0, 0); }
-    else if ((m = h.match(/^\/compare\/([\d,]+)/))) await renderCompare(m[1].split(",").filter(o => /^\d{9}$/.test(o)).slice(0, 4));
-    else renderList();
-  } catch (err) { $("#app").innerHTML = `<div class="empty">Could not load: ${esc(err.message)}</div>`; }
+    if ((m = h.match(/^\/c\/(\d{9})(?:\/(cl-[0-9a-f]+))?/))) {
+      kind = lastKind = "company:" + m[1];
+      if (prev !== kind) await renderCompany(m[1]);
+      if (m[2]) revealClaim(m[2]); else if (prev !== kind) scrollTo(0, 0);
+    } else if ((m = h.match(/^\/compare\/([\d,]+)/))) {
+      kind = lastKind = "compare";
+      const orgs = [...new Set(m[1].split(",").filter(o => /^\d{9}$/.test(o)))].slice(0, MAX_COMPARE);
+      selected = new Set(orgs);
+      await renderCompare(orgs); scrollTo(0, 0);
+    } else {
+      readListHash(h);
+      lastKind = kind;
+      renderList();
+      scrollTo(0, prev && prev !== "list" ? listScroll : 0);
+    }
+  } catch (err) {
+    $("#app").innerHTML = `<div class="card empty"><h2>This page could not be loaded</h2><p>${esc(err.message)}</p><div class="actions"><a class="btn" href="#/">Back to all companies</a></div></div>`;
+  }
+  const changed = prev !== kind || kind === "compare";
+  lastKind = kind;
+  updateBar();
+  if (changed && document.activeElement !== $("#q") && !/\/cl-/.test(h)) ($("#app h1[tabindex]") || $("#app")).focus({preventScroll: true});
 }
-$("#q").oninput = () => { if (location.hash.length > 2) location.hash = "#/"; renderList(); };
-document.querySelectorAll(".chip[data-f]").forEach(b => b.onclick = () => { const f = b.dataset.f; filters.has(f) ? filters.delete(f) : filters.add(f); b.setAttribute("aria-pressed", filters.has(f)); if (location.hash.length > 2) location.hash = "#/"; renderList(); });
+let typing;
+$("#q").oninput = e => {
+  state.q = e.target.value;
+  clearTimeout(typing);
+  typing = setTimeout(() => { if (lastKind === "list") listChanged(); else location.hash = listHash(); }, 120);
+};
+addEventListener("keydown", e => { if (e.key === "/" && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName) && !e.ctrlKey && !e.metaKey) { e.preventDefault(); $("#q").focus(); } });
 addEventListener("hashchange", route);
 load();
 </script>

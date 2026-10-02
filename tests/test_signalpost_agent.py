@@ -385,3 +385,15 @@ def test_member_page_on_a_chain_site_publishes_only_the_labelled_url(url):
 def test_own_or_number_verified_sites_keep_their_content(final_url, markers):
     envelope = build_envelope(chain_profile(final_url, markers), run=RUN)
     assert web_fields(envelope) == ["careers_page", "facebook", "official_website", "self_description", "website_brand_title", "website_news", "website_scope"]
+
+
+def test_site_index_row_carries_leaders_and_presence_counts_for_search_and_filters(tmp_path):
+    from norway_company_agent.site import row
+
+    p = chain_profile("https://www.aas.no/")
+    p["evidence"]["roles"] = evidence("roles", "available", "official_roles", "https://data.brreg.no/enhetsregisteret/api/enheter/888567232/roller", value={
+        "roles": [{"role": "Daglig leder", "role_code": "DAGL", "name": "Kari Nordmann"}, {"role": "Styrets leder", "role_code": "LEDE", "name": "Ola Hansen"},
+                  {"role": "Styremedlem", "role_code": "MEDL", "name": "Per Olsen"}]}, content_sha256="b" * 64, retrieved_at="2026-09-27T00:00:10Z")
+    index_row = row(apply_refresh(None, build_envelope(p, run=RUN)))
+    assert index_row["l"] == ["Kari Nordmann", "Ola Hansen"]
+    assert (index_row["x"], index_row["y"]) == (1, 1)  # one company profile, one website news item

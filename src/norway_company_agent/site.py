@@ -27,6 +27,9 @@ def row(envelope: dict) -> dict:
     claims = envelope.get("claims") or []
     by = lambda family, field: next((claim.get("value") for claim in claims if claim.get("family") == family and claim.get("field") == field), None)  # noqa: E731
     industry = by("legal_identity", "industry")
+    live = [claim for claim in claims if not claim.get("stale")]
+    leaders = [claim["value"].get("name") for code in ("DAGL", "LEDE") for claim in live
+               if claim.get("family") == "leadership" and isinstance(claim.get("value"), dict) and claim["value"].get("role_code") == code]
     return {
         "o": envelope["organisation_number"],
         "n": envelope.get("legal_name") or by("legal_identity", "legal_name"),
@@ -38,6 +41,9 @@ def row(envelope: dict) -> dict:
         "p": amount(claims, "annual_result"),
         "w": by("official_website", "official_website"),
         "j": sum(1 for claim in claims if claim.get("field") == "open_job" and not claim.get("stale")),
+        "l": [name for name in leaders if name],
+        "x": sum(1 for claim in live if claim.get("family") == "company_profiles"),
+        "y": sum(1 for claim in live if claim.get("field") == "website_news"),
         "c": len(envelope.get("changes") or []),
         "s": envelope.get("state"),
         "a": envelope.get("availability") or {},
