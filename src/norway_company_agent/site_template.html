@@ -369,6 +369,12 @@ function renderList() {
   say(`${list.length} of ${rows.length} companies shown`);
   updateBar();
 }
+// Text scraped from websites must not run as a spreadsheet formula when the CSV is opened: prefix such cells with an apostrophe.
+function csvCell(v) {
+  let text = String(v ?? "");
+  if (typeof v !== "number" && /^[=+\-@\t\r]/.test(text)) text = "'" + text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
 function download(name, text, type) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], {type}));
@@ -379,7 +385,7 @@ function download(name, text, type) {
 }
 function exportCsv(list) {
   const cols = [["organisation_number", r => r.o], ["legal_name", r => r.n], ["legal_form", r => r.f], ["municipality", r => r.m], ["industry", r => r.i], ["registered_employees", r => r.e], ["revenue_nok", r => r.r], ["net_result_nok", r => r.p], ["verified_website", r => r.w], ["open_jobs", r => r.j], ["company_profiles", r => r.x], ["news_items", r => r.y], ["changes", r => r.c], ["families_available", r => coverage(r)]];
-  const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const cell = csvCell;
   const text = [cols.map(c => c[0]).join(","), ...list.map(r => cols.map(c => cell(c[1](r))).join(","))].join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + text], {type: "text/csv;charset=utf-8"}));
@@ -512,7 +518,7 @@ async function renderCompany(org) {
   $("#x-json").onclick = () => download(`signalpost-${org}.json`, JSON.stringify(env, null, 2), "application/json");
   $("#x-csv").onclick = () => {
     const cols = ["claim_id", "section", "family", "field", "value", "reporting_period", "effective_date", "confidence", "quoted_source", "locator", "source_url", "source_class", "retrieved_at", "content_sha256", "snapshot_path", "rights"];
-    const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const cell = csvCell;
     const lines = claims.map(c => { const e = evidence[(c.evidence_ids||[])[0]] || {}; return [c.claim_id, c.section, c.family, c.field, typeof c.value === "object" ? JSON.stringify(c.value) : c.value, c.reporting_period, c.effective_date, c.confidence, c.claim_span, c.locator, e.final_url || e.source_url, e.source_class, e.retrieved_at, e.content_sha256, e.snapshot_path, e.rights].map(cell).join(","); });
     download(`signalpost-${org}-evidence.csv`, "\ufeff" + [cols.join(","), ...lines].join("\r\n"), "text/csv;charset=utf-8");
   };

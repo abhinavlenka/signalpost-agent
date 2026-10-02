@@ -9,6 +9,7 @@ from typing import Any
 LEGAL_AND_GENERIC = {
     "as", "asa", "ans", "da", "enk", "iks", "sa", "sam", "sti", "stiftelsen",
     "nuf", "ab", "b", "v", "limited", "ltd", "inc", "plc", "the", "og", "and",
+    "sameiet", "sameie", "borettslag", "borettslaget", "brl",
 }
 
 

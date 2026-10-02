@@ -755,3 +755,14 @@ def test_trend_never_compares_group_accounts_with_company_accounts():
     summary, _ = summary_of(p)
     assert "Revenue rose" not in summary["text"] and "The net result rose" not in summary["text"]
     assert "Filed accounts for the period ending 2025-12-31 show revenue of NOK 5.0 m" in summary["text"]
+
+
+@pytest.mark.parametrize("name, host, title, publishable", [
+    ("SAMEIET ST OLAV", "https://st-olav.no/", "Velkommen", True),             # the declared domain spells the name once the entity-type word is set aside
+    ("Forsheimer Borettslag", "https://www.usbl.no/", "Usbl - boligbyggelag", False),  # the manager's site, not the housing cooperative's
+])
+def test_entity_type_words_are_not_part_of_the_distinguishing_name(name, host, title, publishable):
+    from norway_company_agent.identity import assess_website_identity
+
+    assessment = assess_website_identity(gate_profile(name, title=title, text="Informasjon til beboere og eiere. " * 5, markers=[], host=host))
+    assert assessment["publishable"] is publishable
