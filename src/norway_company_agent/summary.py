@@ -118,7 +118,7 @@ def build_summary(envelope: dict[str, Any]) -> dict[str, Any]:
     if website:
         scope = first("public_brand", "website_scope")
         if scope and scope["value"] == "page_on_third_party_site":
-            say(f"The register lists a page about it on a third-party site: {website['value']}.", website, scope)
+            say(f"It has a page on a third-party site: {website['value']}.", website, scope)
         else:
             say(f"Its verified website is {website['value']}.", website)
     profiles = [claim for (family, _), items in by_field.items() if family == "company_profiles" for claim in items]

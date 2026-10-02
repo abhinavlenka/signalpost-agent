@@ -62,6 +62,8 @@ Other flags: `--out`, `--state`, `--previous`, `--nav-days` (45), `--no-nav`.
 
 **Not used:** search engines, LinkedIn, Meta, Glassdoor, Indeed, Google, or any unofficial scrapers.
 
+`scripts/` still holds the starter kit's experimental connectors (LinkedIn guest pages, Google Maps, Brave, YouTube and others), kept unchanged because the starter kit's tests cover them. The run command never imports or calls them.
+
 Job-ad contact persons, e-mails and phone numbers are never stored. Personal birth dates from the roles register are discarded.
 
 ## How identity is protected
