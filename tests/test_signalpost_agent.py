@@ -397,3 +397,326 @@ def test_site_index_row_carries_leaders_and_presence_counts_for_search_and_filte
     index_row = row(apply_refresh(None, build_envelope(p, run=RUN)))
     assert index_row["l"] == ["Kari Nordmann", "Ola Hansen"]
     assert (index_row["x"], index_row["y"]) == (1, 1)  # one company profile, one website news item
+
+
+# ---------- final pass: recall, contract and honest states
+
+def test_profiles_declared_in_organisation_markup_and_publisher_meta_are_found():
+    from norway_company_agent.website import page_social_links
+
+    html = """<html><head>
+      <meta property="article:publisher" content="https://www.facebook.com/AasElektronikk/" />
+      <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"Aas Elektronikk AS",
+        "sameAs":["https:\\/\\/www.facebook.com\\/AasElektronikk\\/","https:\\/\\/www.youtube.com\\/user\\/aaselektronikk"]}]}</script>
+      </head><body><footer><a href="https://www.instagram.com/aaselektronikk/">Instagram</a>
+      <a href="https://www.facebook.com/sharer/sharer.php?u=x">Share</a></footer></body></html>"""
+    assert [(item["platform"], item["url"]) for item in page_social_links(html, "https://aas.no/")] == [
+        ("facebook", "https://facebook.com/AasElektronikk"), ("instagram", "https://instagram.com/aaselektronikk"), ("youtube", "https://youtube.com/user/aaselektronikk")]
+
+
+def gate_profile(name, *, title, text, markers, registry_listed=True, host="https://www.worksystem.no/"):
+    return {"organisation_number": "913170296", "name": name, "evidence": {"website": {"status": "available", "source_url": host, "value": {
+        "final_url": host, "title": title, "description": "", "main_text_excerpt": text, "registry_listed": registry_listed,
+        "identity_markers": {host: list(markers)}, "pages": []}}}}
+
+
+@pytest.mark.parametrize("name, title, text, markers, registry_listed, publishable", [
+    # register-listed, country word missing from the page, registered phone on the site
+    ("WORK SYSTEM NORWAY AS", "Hjemmeside", "Work System leverer innredning til varebiler og servicebiler over hele landet. " * 3, ["phone"], True, True),
+    # one-word name in the title of a JavaScript-rendered homepage (almost no text), registered address on the site
+    ("DIPS AS", "DIPS - Ledende leverandør av e-helse", "", ["address"], True, True),
+    # same pages without the registered phone or address: still not proven
+    ("WORK SYSTEM NORWAY AS", "Hjemmeside", "Work System leverer innredning til varebiler og servicebiler over hele landet. " * 3, [], True, False),
+    # a sister company sharing the switchboard: the distinctive word of its own name is missing
+    ("WORK SYSTEM EIENDOM AS", "Hjemmeside", "Work System leverer innredning til varebiler og servicebiler over hele landet. " * 3, ["phone", "address"], True, False),
+    # an owner's site listed by a property company: none of its name is there
+    ("DRAMMENSVEIEN 133 AS", "Klaveness Marine", "Klaveness Marine is a family-owned investment company. " * 3, ["phone", "address"], True, False),
+    # not declared to the register: phone and partial name are not enough here (discovery has its own stricter rule)
+    ("WORK SYSTEM NORWAY AS", "Hjemmeside", "Work System leverer innredning til varebiler og servicebiler over hele landet. " * 3, ["phone"], False, False),
+])
+def test_register_listed_site_is_proven_by_registered_contact_details_plus_name(name, title, text, markers, registry_listed, publishable):
+    from norway_company_agent.identity import assess_website_identity
+
+    host = "https://www.dips.com/" if name == "DIPS AS" else "https://www.klavenessmarine.com/" if name.startswith("DRAMMENSVEIEN") else "https://www.worksystem.no/"
+    assessment = assess_website_identity(gate_profile(name, title=title, text=text, markers=markers, registry_listed=registry_listed, host=host))
+    assert assessment["publishable"] is publishable
+
+
+def international_profile(legal_form="AS", markers=(), name="KITRON AS", url="https://www.kitron.com/"):
+    p = profile()
+    p["name"], p["legal_form"] = name, legal_form
+    p["evidence"]["website"] = evidence("website", "available", "registry_linked_company_website", url, value={
+        "final_url": url, "requested_url": url, "content_sha256": "f" * 64, "identity_markers": {url: [], url + "contact": list(markers)},
+        "identity_assessment": {"publishable": True, "score": 0.95, "reasons": ["name"], "method": "m"},
+        "social_links": [{"platform": "facebook", "url": "https://facebook.com/kitrongroup"}, {"platform": "linkedin", "url": "https://linkedin.com/company/kitron"}]})
+    return p
+
+
+@pytest.mark.parametrize("legal_form, markers, scope, profiles", [
+    ("AS", (), "possibly_group_or_international", []),                                   # could be a foreign group's site
+    ("AS", ("address",), "verified_by_registered_address_or_phone", ["facebook", "linkedin"]),  # registered address is on the site
+    ("AS", ("phone",), "verified_by_registered_address_or_phone", ["facebook", "linkedin"]),
+    ("ASA", (), "public_company_own_site", ["facebook", "linkedin"]),                    # a Norwegian public company is the parent
+])
+def test_international_domain_is_only_a_group_site_without_norwegian_proof(legal_form, markers, scope, profiles):
+    envelope = build_envelope(international_profile(legal_form, markers), run=RUN)
+    assert [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"] == [scope]
+    assert sorted(c["field"] for c in envelope["claims"] if c["family"] == "company_profiles") == profiles
+
+
+def test_envelope_follows_the_published_contract_names():
+    envelope = build_envelope(website_profile("https://aas.no/"), run=RUN, operations={"requests": 7, "runtime_ms": 1200, "third_party_cost_usd": 0})
+    evidence_ids = {item["id"] for item in envelope["evidence"]}
+    assert evidence_ids and all(item["id"] == item["evidence_id"] for item in envelope["evidence"])
+    assert all(set(claim["evidence_ids"]) <= evidence_ids for claim in envelope["claims"])
+    assert all(isinstance(item.get("claim_span"), str) and item["claim_span"] for item in envelope["evidence"])
+    assert all(claim["availability"] == "available" and isinstance(claim["confidence"], float) for claim in envelope["claims"])
+    assert envelope["operations"]["requests"] == 7
+
+
+@pytest.mark.parametrize("title, text, challenged", [
+    ("Verifying...", "", True),
+    ("Just a moment...", "Checking your browser before accessing the site.", True),
+    ("Attention Required! | Cloudflare", "", True),
+    ("Aas Elektronikk AS", "", False),
+    ("Verifying deliveries for our customers", "Vi leverer elektronikk til industrien i hele Norge. " * 4, False),
+])
+def test_bot_challenge_pages_are_recognised(title, text, challenged):
+    from norway_company_agent.website import is_bot_challenge
+
+    assert is_bot_challenge(title, text) is challenged
+
+
+def test_feed_link_is_taken_from_the_page_head_on_the_same_domain_only():
+    from norway_company_agent.website import declared_feed_url
+
+    head = lambda links: f"<html><head>{links}</head><body></body></html>"  # noqa: E731
+    own = '<link rel="alternate" type="application/rss+xml" title="Aas &raquo; Feed" href="https://aas.no/feed/" />'
+    comments = '<link rel="alternate" type="application/rss+xml" title="Aas &raquo; Comments Feed" href="https://aas.no/comments/feed/" />'
+    foreign = '<link rel="alternate" type="application/atom+xml" href="https://feeds.example.com/aas" />'
+    assert declared_feed_url(head(comments + own), "https://aas.no/") == "https://aas.no/feed/"
+    assert declared_feed_url(head('<link rel="alternate" type="application/rss+xml" href="/nyheter/rss" />'), "https://www.aas.no/om/") == "https://www.aas.no/nyheter/rss"
+    assert declared_feed_url(head(foreign + comments), "https://aas.no/") is None
+
+
+def test_feed_items_are_dated_news_with_exact_dates():
+    from norway_company_agent.website import feed_items
+
+    rss = """<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Aas</title>
+      <item><title>Ny rammeavtale med Bane NOR</title><link>https://aas.no/nyheter/ny-rammeavtale/</link><pubDate>Tue, 15 Sep 2026 08:30:00 +0000</pubDate></item>
+      <item><title>Uten dato</title><link>https://aas.no/nyheter/uten-dato/</link></item>
+      <item><title>Fra et annet nettsted</title><link>https://other.example.com/post</link><pubDate>Mon, 14 Sep 2026 08:30:00 +0000</pubDate></item>
+    </channel></rss>"""
+    atom = """<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Aas</title>
+      <entry><title>Vi flytter til nye lokaler</title><link rel="alternate" href="https://aas.no/aktuelt/flytter/"/><published>2026-06-01T10:00:00Z</published></entry></feed>"""
+    assert feed_items(rss, "https://aas.no/feed/") == [
+        {"date": "2026-09-15", "title": "Ny rammeavtale med Bane NOR", "url": "https://aas.no/nyheter/ny-rammeavtale/", "locator": "rss:item/pubDate"}]
+    assert feed_items(atom, "https://aas.no/feed.atom") == [
+        {"date": "2026-06-01", "title": "Vi flytter til nye lokaler", "url": "https://aas.no/aktuelt/flytter/", "locator": "atom:entry/published"}]
+    assert feed_items("<html>not a feed</html>", "https://aas.no/feed/") == []
+
+
+# ---------- final pass: evidence spans, snapshots and rights
+
+RAW_ENTITY = """{
+  "organisasjonsnummer" : "888567232",
+  "navn" : "AAS ELEKTRONIKK AS",
+  "organisasjonsform" : {
+    "kode" : "AS",
+    "beskrivelse" : "Aksjeselskap"
+  },
+  "forretningsadresse" : {
+    "land" : "Norge",
+    "postnummer" : "4823",
+    "poststed" : "NEDENES",
+    "adresse" : [ "Natvigveien 17" ],
+    "kommune" : "ARENDAL"
+  },
+  "sisteInnsendteAarsregnskap" : "2025"
+}"""
+RAW_ACCOUNTS = """[ {
+  "id" : 1,
+  "regnskapsperiode" : { "fraDato" : "2025-01-01", "tilDato" : "2025-12-31" },
+  "virksomhet" : { "organisasjonsnummer" : "888567232" },
+  "resultatregnskapResultat" : { "driftsresultat" : { "driftsinntekter" : { "sumDriftsinntekter" : 1425713.00 } } },
+  "eiendeler" : { "sumEiendeler" : 0.00 }
+} ]"""
+
+
+def spans(envelope):
+    return {(c["family"], c["field"]): c["claim_span"] for c in envelope["claims"]}
+
+
+def test_registry_claims_quote_the_source_text_as_received():
+    p = profile()
+    p["evidence"]["registry_live"]["raw_text"] = RAW_ENTITY
+    p["evidence"]["financials"]["raw_text"] = RAW_ACCOUNTS
+    quoted = spans(build_envelope(p, run=RUN))
+    assert quoted[("legal_identity", "legal_name")] == '"navn" : "AAS ELEKTRONIKK AS"'
+    assert quoted[("legal_identity", "legal_form")] == '"kode" : "AS"'
+    assert quoted[("legal_identity", "municipality")] == '"kommune" : "ARENDAL"'
+    assert quoted[("legal_identity", "business_address")] == '"forretningsadresse" : { "land" : "Norge", "postnummer" : "4823", "poststed" : "NEDENES", "adresse" : [ "Natvigveien 17" ], "kommune" : "ARENDAL" }'
+    assert quoted[("annual_accounts", "revenue")] == '"sumDriftsinntekter" : 1425713.00 (regnskapsperiode 2025-01-01..2025-12-31)'
+    assert quoted[("annual_accounts", "assets")] == '"sumEiendeler" : 0.00 (regnskapsperiode 2025-01-01..2025-12-31)'
+    assert quoted[("filing_history", "latest_submitted_accounts_year")] == '"sisteInnsendteAarsregnskap" : "2025"'
+
+
+def test_every_claim_and_every_evidence_record_carries_a_span_even_without_raw_text():
+    envelope = build_envelope(chain_profile("https://www.aas.no/"), run=RUN)
+    assert [c["field"] for c in envelope["claims"] if not c["claim_span"]] == []
+    assert [e["source_class"] for e in envelope["evidence"] if not e["claim_span"]] == []
+    assert spans(envelope)[("legal_identity", "legal_name")] == '"navn": "AAS ELEKTRONIKK AS"'
+
+
+def test_evidence_points_to_the_stored_snapshot_and_states_the_source_rights(tmp_path):
+    from norway_company_agent.rawstore import save_raw, set_raw_store
+
+    set_raw_store(tmp_path)
+    try:
+        save_raw("a" * 64, RAW_ENTITY.encode())
+        envelope = build_envelope(profile(), run=RUN)
+    finally:
+        set_raw_store(None)
+    by_class = {item["source_class"]: item for item in envelope["evidence"]}
+    assert by_class["official_registry_live"]["snapshot_path"] == "raw/aa/" + "a" * 64 + ".gz"
+    assert __import__("gzip").decompress((tmp_path / by_class["official_registry_live"]["snapshot_path"]).read_bytes()).decode() == RAW_ENTITY
+    assert by_class["official_annual_accounts"]["snapshot_path"] is None  # nothing was stored for that hash
+    assert "NLOD" in by_class["official_registry_live"]["rights"]
+
+
+# ---------- final pass: per-company request counts, search discovery, summary
+
+def test_requests_are_attributed_to_the_company_being_researched():
+    from norway_company_agent.budget import active_budget
+    from norway_company_agent.pipeline import _guarded
+
+    set_active_budget(RequestBudget(max_requests=100))
+    try:
+        def step(company):
+            active_budget().take("https://aas.no/")
+            active_budget().take("https://aas.no/kontakt")
+
+        first, second = {"errors": []}, {"errors": []}
+        _guarded(step, first)
+        _guarded(step, first)
+        _guarded(step, second)
+    finally:
+        set_active_budget(None)
+    assert (first["requests"], second["requests"]) == (4, 2)
+
+
+def site_record(url, *, title, markers, text="Vi leverer elektronikk til industrien i hele Norge. " * 4):
+    return evidence("website", "available", "registry_linked_company_website", url, value={
+        "final_url": url, "requested_url": url, "title": title, "description": "", "main_text_excerpt": text, "content_sha256": "e" * 64,
+        "identity_markers": {url: list(markers)}, "identity_snippets": {url: {m: f"proof of {m}" for m in markers}}, "pages": [], "social_links": []}, content_sha256="e" * 64), {"requests": 2}
+
+
+SEARCH_RESULTS = [
+    {"url": "https://www.proff.no/selskap/aas-elektronikk-as/888567232", "title": "Aas Elektronikk AS - Proff", "snippet": "Org.nr 888 567 232", "rank": 1, "provider": "brave_search_api", "query": "q"},
+    {"url": "https://www.elektro-sor.no/", "title": "Elektro Sør | Aas Elektronikk AS", "snippet": "Aas Elektronikk AS, Natvigveien 17, Nedenes", "rank": 2, "provider": "brave_search_api", "query": "q"},
+]
+
+
+def search_profile():
+    p = profile()
+    p["legal_form"] = "AS"
+    return p
+
+
+def test_search_discovery_is_off_without_a_key(monkeypatch):
+    from norway_company_agent import pipeline
+
+    monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
+    monkeypatch.delenv("SIGNALPOST_BRAVE_API_KEY", raising=False)
+    calls = []
+    assert pipeline.discover_by_search(search_profile(), search=lambda query, key: calls.append(query) or SEARCH_RESULTS) is None
+    assert calls == []
+
+
+def test_search_candidate_is_published_only_after_the_fetched_site_proves_the_entity(monkeypatch):
+    from norway_company_agent import pipeline
+
+    monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
+    pipeline.reset_search_quota(10)
+    fetched = []
+
+    def fake_fetch(url, **kwargs):
+        fetched.append(url)
+        return site_record("https://www.elektro-sor.no/", title="Elektro Sør", markers=["organisation_number"])
+
+    monkeypatch.setattr(pipeline, "fetch_website", fake_fetch)
+    monkeypatch.setattr(pipeline, "resolve_many", lambda hosts, timeout=4.0: set(hosts))
+    p = search_profile()
+    result = pipeline.discover_by_search(p, search=lambda query, key: SEARCH_RESULTS)
+    assert result["query"] == '"AAS ELEKTRONIKK AS" 888567232'
+    assert all("proff.no" not in url for url in fetched)  # directories are never crawled as candidates
+    envelope = build_envelope(p, run=RUN)
+    assert [c["value"] for c in envelope["claims"] if c["field"] == "official_website"] == ["https://www.elektro-sor.no/"]
+    assert {e["source_class"] for e in envelope["evidence"] if "elektro-sor" in e["source_url"]} == {"search_discovered_website"}
+    assert p["search_queries"] == 1
+
+
+def test_search_candidate_without_registry_proof_on_the_site_is_dropped(monkeypatch):
+    from norway_company_agent import pipeline
+
+    monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
+    pipeline.reset_search_quota(10)
+    monkeypatch.setattr(pipeline, "fetch_website", lambda url, **kwargs: site_record("https://www.elektro-sor.no/", title="Aas Elektronikk AS", markers=[]))
+    monkeypatch.setattr(pipeline, "resolve_many", lambda hosts, timeout=4.0: set(hosts))
+    p = search_profile()
+    pipeline.discover_by_search(p, search=lambda query, key: SEARCH_RESULTS)
+    assert build_envelope(p, run=RUN)["availability"]["official_website"] == "not_available"
+
+
+def test_search_quota_caps_paid_queries(monkeypatch):
+    from norway_company_agent import pipeline
+
+    monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
+    pipeline.reset_search_quota(1)
+    monkeypatch.setattr(pipeline, "fetch_website", lambda url, **kwargs: site_record("https://www.elektro-sor.no/", title="x", markers=[]))
+    monkeypatch.setattr(pipeline, "resolve_many", lambda hosts, timeout=4.0: set(hosts))
+    calls = []
+    search = lambda query, key: calls.append(query) or SEARCH_RESULTS  # noqa: E731
+    pipeline.discover_by_search(search_profile(), search=search)
+    assert pipeline.discover_by_search(search_profile(), search=search) == {"skipped": "search query quota used"}
+    assert len(calls) == 1
+
+
+def accounts_profile(records):
+    p = profile()
+    p["evidence"]["registry_live"]["value"].update({"bankrupt": False, "liquidating": False, "forced_dissolution": False})
+    p["evidence"]["financials"]["value"]["records"] = [
+        {"period": {"fraDato": f"{year}-01-01", "tilDato": f"{year}-12-31"}, "currency": "NOK", "account_type": "SELSKAP", **figures} for year, figures in records]
+    return p
+
+
+def summary_of(p, run=RUN):
+    envelope = apply_refresh(None, build_envelope(p, run=run))
+    return build_summary(envelope), envelope
+
+
+def test_summary_explains_the_trend_between_the_two_latest_filed_years():
+    summary, envelope = summary_of(accounts_profile([(2025, {"revenue": 1425713.0, "annual_result": -50000.0, "assets": 2000000.0, "equity": 500000.0}),
+                                                     (2024, {"revenue": 1000000.0, "annual_result": 120000.0, "assets": 1800000.0, "equity": 550000.0})]))
+    text = summary["text"]
+    assert "Revenue rose 42.6% from NOK 1.0 m in 2024 to NOK 1.4 m in 2025." in text
+    assert "The net result fell from NOK 120 k to a loss of NOK 50 k." in text
+    assert "Equity was NOK 500 k at the end of 2025, 25% of total assets." in text
+    by_id = {c["claim_id"]: c for c in envelope["claims"]}
+    trend = next(s for s in summary["sentences"] if s["text"].startswith("Revenue rose"))
+    assert sorted(by_id[i]["reporting_period"][:4] for i in trend["claim_ids"]) == ["2024", "2025"]
+
+
+def test_summary_flags_negative_equity_and_states_clean_register_status():
+    summary, _ = summary_of(accounts_profile([(2025, {"revenue": 900000.0, "annual_result": -400000.0, "assets": 300000.0, "equity": -150000.0})]))
+    assert "Equity was negative (NOK -150 k) at the end of 2025." in summary["text"]
+    assert "The register shows no bankruptcy, liquidation or forced dissolution." in summary["text"]
+
+
+def test_summary_is_grouped_into_sections_and_says_why_things_are_unknown():
+    summary, envelope = summary_of(accounts_profile([(2025, {"revenue": 900000.0, "annual_result": 10000.0, "assets": 300000.0, "equity": 100000.0})]))
+    ids = {c["claim_id"] for c in envelope["claims"]}
+    assert [section["key"] for section in summary["sections"]] == ["identity", "finances", "people"]
+    assert all(s["section"] in {"identity", "business", "finances", "people", "presence"} and set(s["claim_ids"]) <= ids for s in summary["sentences"])
+    assert "official website (the register lists no website and none was verified)" in summary["unknowns_text"]
+    assert "job postings (no active NAV job ads with this organisation number in the checked window)" in summary["unknowns_text"]

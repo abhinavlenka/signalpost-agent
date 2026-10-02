@@ -13,6 +13,14 @@ from collections import Counter
 from typing import Any
 
 
+_thread = threading.local()
+
+
+def thread_requests() -> int:
+    """Requests taken by the calling thread so far; a worker handles one company at a time, so deltas attribute requests to companies."""
+    return getattr(_thread, "count", 0)
+
+
 class BudgetExhausted(RuntimeError):
     """Raised when the request cap or wall-clock deadline would be exceeded."""
 
@@ -56,6 +64,7 @@ class RequestBudget:
             self._used += 1
             self._by_host[host] += 1
             self._by_purpose[purpose] += 1
+        _thread.count = getattr(_thread, "count", 0) + 1
 
     def report(self) -> dict[str, Any]:
         with self._lock:

@@ -11,9 +11,11 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from .budget import BudgetExhausted, active_budget
+from .rawstore import save_raw
 
 USER_AGENT = "signalpost-agent/1.0 (+https://builderr.ai/challenges/signalpost)"
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+UNSTORED_PURPOSES = {"nav_feed", "nav_token", "search_api"}  # bulk feed pages, tokens and search results are not claim evidence
 
 
 @dataclass
@@ -28,6 +30,7 @@ class FetchResult:
     retrieved_at: str | None = None
     effective_at: str | None = None
     attempts: int = 1
+    text: str | None = None  # the response as received, for quoting the exact source text of a claim
 
 
 def _utc_now() -> str:
@@ -93,7 +96,12 @@ def _fetch(
             with _OPENER.open(request, timeout=timeout) as response:
                 raw = response.read()
                 elapsed = int((time.monotonic() - started) * 1000)
-                return FetchResult(url, response.status, elapsed, len(raw), parse(raw), content_sha256=hashlib.sha256(raw).hexdigest(), retrieved_at=_utc_now(), attempts=attempt + 1)
+                digest = hashlib.sha256(raw).hexdigest()
+                body = parse(raw)
+                if purpose not in UNSTORED_PURPOSES:
+                    save_raw(digest, raw)
+                return FetchResult(url, response.status, elapsed, len(raw), body, content_sha256=digest, retrieved_at=_utc_now(), attempts=attempt + 1,
+                                   text=None if purpose in UNSTORED_PURPOSES else raw.decode("utf-8", errors="replace"))
         except urllib.error.HTTPError as exc:
             elapsed = int((time.monotonic() - started) * 1000)
             raw = exc.read()

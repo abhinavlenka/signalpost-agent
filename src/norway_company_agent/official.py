@@ -295,4 +295,6 @@ def fetch_official_modules(org: str, modules: set[str], fetcher: Callable[[str],
             }
             normalized = normalizers[module](result.body) if module in normalizers else result.body
         records[module] = _classified(module, source_type, result, value=normalized)
+        if result.status == 200 and getattr(result, "text", None):
+            records[module]["raw_text"] = result.text  # in-memory only: used to quote the source in claim spans
     return records, metrics

@@ -4,22 +4,27 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import os
 import re
 import socket
 import threading
 import time
 import traceback
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from typing import Any, Callable
 
-from .budget import BudgetExhausted, RequestBudget, active_budget, set_active_budget
+from .budget import BudgetExhausted, RequestBudget, active_budget, set_active_budget, thread_requests
 from .claim_refresh import apply_refresh
 from .envelope import build_envelope
+from .discovery import BLOCKED_DISCOVERY_HOSTS, build_company_search_query, choose_search_candidate, parse_brave_web_results
 from .evidence import evidence, utc_now
+from .http import fetch_json
 from .identity import apply_website_identity_gate
 from .jobs_nav import NavJobIndex, match_company_jobs, raw_tokens
 from .official import fetch_official_modules, set_accounts_lanes
+from .rawstore import set_raw_store
 from .site import build_site
 from .summary import build_summary
 from .website import fetch_website
@@ -192,7 +197,7 @@ def research_website(profile: dict[str, Any], url: str | None, *, discovery: str
                 "reasons": [*assessment.get("reasons", []), f"homepage declared by employer orgnr {declared_by.get('employer_orgnr')} in NAV ad {declared_by.get('uuid')}"],
             })
             value["social_links"] = [
-                {"platform": item["platform"], "url": item["url"]}
+                {key: item[key] for key in ("platform", "url", "declared_in") if key in item}
                 for item in value.get("social_link_assessments") or [] if item.get("publishable")
             ]
     if value:
@@ -327,35 +332,133 @@ def discover_by_domain_guess(profile: dict[str, Any]) -> dict[str, Any] | None:
             tried.append({"domain": domain, "result": "homepage does not name the company"})
             continue
         crawls += 1
-        record, _ = fetch_website(probe_value.get("final_url") or host, identity=identity, max_pages=3)
-        if record.get("status") != "available":
-            record = probe
-        record["source_type"] = record["source_class"] = discovery
-        record["value"]["registry_listed"] = discovery == "registry_email_domain"
-        gated = apply_website_identity_gate(profile, record)["website"]
-        value = gated.get("value") or {}
-        assessment = value.get("identity_assessment") or {}
-        markers = {marker for items in (value.get("identity_markers") or {}).values() for marker in items}
-        name_exact = assessment.get("score", 0) >= 0.95 and "legal-name" in " ".join(assessment.get("reasons") or [])
-        if "organisation_number" in markers or (name_exact and markers & {"address", "phone"}):
-            verdict = f"verified by registry markers: {sorted(markers)}"
-            score = 1.0 if "organisation_number" in markers else 0.95
-        elif discovery == "registry_email_domain" and assessment.get("publishable"):
-            verdict = "company-declared e-mail domain in the official register, and the site passes the exact-entity gate"
-            score = min(0.93, float(assessment.get("score") or 0.93))
-        else:
-            tried.append({"domain": domain, "result": "identity not verified", "markers": sorted(markers)})
-            continue
-        assessment.update({
-            "status": "exact", "publishable": True, "method": f"{discovery}_v2", "score": score,
-            "reasons": [*assessment.get("reasons", []), f"{discovery.replace('_', ' ')} {verdict}"],
-        })
-        value["social_links"] = [{"platform": item["platform"], "url": item["url"]} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
-        value["discovery_method"] = discovery
-        profile["evidence"]["website"] = gated
-        tried.append({"domain": domain, "result": "verified"})
-        return {"tried": tried}
+        published, outcome = _crawl_and_gate(profile, probe, host, discovery, identity)
+        tried.append({"domain": domain, **outcome})
+        if published:
+            return {"tried": tried}
     return {"tried": tried}
+
+
+def _crawl_and_gate(profile: dict[str, Any], probe: dict[str, Any], target: str, discovery: str, identity: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    """Bounded crawl of a promising candidate, then the strict discovered-site gate.
+
+    A site nobody declared to the register is published only with the org number on it, or the exact
+    legal name plus the registered address or phone. A register-declared e-mail domain faces the
+    same gate as a register-listed website.
+    """
+    declared = discovery == "registry_email_domain"
+    record, _ = fetch_website((probe.get("value") or {}).get("final_url") or target, identity=identity, max_pages=3)
+    if record.get("status") != "available":
+        record = probe
+    record["source_type"] = record["source_class"] = discovery
+    record["value"]["registry_listed"] = declared
+    gated = apply_website_identity_gate(profile, record)["website"]
+    value = gated.get("value") or {}
+    assessment = value.get("identity_assessment") or {}
+    markers = {marker for items in (value.get("identity_markers") or {}).values() for marker in items}
+    name_exact = assessment.get("score", 0) >= 0.95 and "legal-name" in " ".join(assessment.get("reasons") or [])
+    if "organisation_number" in markers or (name_exact and markers & {"address", "phone"}):
+        verdict = f"verified by registry markers: {sorted(markers)}"
+        score = 1.0 if "organisation_number" in markers else 0.95
+    elif declared and assessment.get("publishable"):
+        verdict = "company-declared e-mail domain in the official register, and the site passes the exact-entity gate"
+        score = min(0.93, float(assessment.get("score") or 0.93))
+    else:
+        return False, {"result": "identity not verified", "markers": sorted(markers)}
+    assessment.update({
+        "status": "exact", "publishable": True, "method": f"{discovery}_v2", "score": score,
+        "reasons": [*assessment.get("reasons", []), f"{discovery.replace('_', ' ')} {verdict}"],
+    })
+    value["social_links"] = [{key: item[key] for key in ("platform", "url", "declared_in") if key in item} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
+    value["discovery_method"] = discovery
+    profile["evidence"]["website"] = gated
+    return True, {"result": "verified"}
+
+
+# -- optional search-API candidate discovery -------------------------------------------------------
+BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+SEARCH_KEY_ENV = ("BRAVE_SEARCH_API_KEY", "SIGNALPOST_BRAVE_API_KEY")
+
+
+class _SearchQuota:
+    """Caps paid search queries per run and spaces them out."""
+
+    def __init__(self, maximum: int, min_interval: float = 0.06) -> None:
+        self.maximum, self.used, self.min_interval = maximum, 0, min_interval
+        self._lock, self._last = threading.Lock(), 0.0
+
+    def take(self) -> bool:
+        with self._lock:
+            if self.used >= self.maximum:
+                return False
+            self.used += 1
+            wait = self.min_interval - (time.monotonic() - self._last)
+            if wait > 0:
+                time.sleep(wait)
+            self._last = time.monotonic()
+            return True
+
+
+_search_quota = _SearchQuota(0)
+
+
+def reset_search_quota(maximum: int) -> None:
+    global _search_quota
+    _search_quota = _SearchQuota(max(0, maximum), float(os.environ.get("SIGNALPOST_SEARCH_MIN_INTERVAL", 0.06)))
+
+
+def search_api_key() -> str:
+    return next((os.environ[name].strip() for name in SEARCH_KEY_ENV if os.environ.get(name, "").strip()), "")
+
+
+def brave_search(query: str, api_key: str) -> list[dict[str, Any]]:
+    url = BRAVE_ENDPOINT + "?" + urllib.parse.urlencode({"q": query, "count": 8, "country": "no", "search_lang": "nb", "safesearch": "moderate", "spellcheck": "0"})
+    result = fetch_json(url, headers={"X-Subscription-Token": api_key, "Accept-Encoding": "identity"}, purpose="search_api", attempts=2, timeout=15.0)
+    if result.status != 200:
+        raise RuntimeError(result.error or f"HTTP {result.status}")
+    return parse_brave_web_results(result.body if isinstance(result.body, dict) else {}, query=query)
+
+
+def discover_by_search(profile: dict[str, Any], *, search: Callable[[str, str], list[dict[str, Any]]] = brave_search) -> dict[str, Any] | None:
+    """Search-API candidates for companies with no verified site. Off unless a key is supplied.
+
+    A search result is only a place to look: nothing from the result is published, and the fetched
+    site must pass the same strict gate as any other undeclared site.
+    """
+    api_key = search_api_key()
+    if not api_key:
+        return None
+    if active_budget().remaining < 300:
+        return {"skipped": "request budget reserved for mandatory sources"}
+    if not _search_quota.take():
+        return {"skipped": "search query quota used"}
+    query = build_company_search_query(profile)
+    profile["search_queries"] = int(profile.get("search_queries") or 0) + 1
+    try:
+        results = search(query, api_key)
+    except Exception as exc:
+        return {"query": query, "error": f"{type(exc).__name__}: {exc}"}
+    blocked = lambda host: any(host == item or host.endswith("." + item) for item in BLOCKED_DISCOVERY_HOSTS)  # noqa: E731
+    candidates = [item for item in choose_search_candidate(profile, results)["candidates"] if item.get("url") and not blocked(item.get("host") or "")]
+    identity = registry_identity(profile)
+    tried: list[dict[str, Any]] = []
+    for candidate in candidates[:3]:
+        probe, _ = fetch_website(candidate["url"], identity=identity, max_pages=0)
+        if probe.get("status") != "available":
+            tried.append({"url": candidate["url"], "result": probe.get("note") or probe.get("status")})
+            continue
+        probe["value"]["registry_listed"] = False
+        probe_value = apply_website_identity_gate(profile, probe)["website"].get("value") or {}
+        markers = {marker for items in (probe_value.get("identity_markers") or {}).values() for marker in items}
+        number_in_result = any("organisation number" in reason for reason in candidate.get("reasons") or [])
+        if not markers and not number_in_result and (probe_value.get("identity_assessment") or {}).get("score", 0) < 0.85:
+            tried.append({"url": candidate["url"], "result": "homepage does not name the company"})
+            continue
+        published, outcome = _crawl_and_gate(profile, probe, candidate["url"], "search_discovered_website", identity)
+        tried.append({"url": candidate["url"], **outcome})
+        if published:
+            break
+    return {"query": query, "results": len(results), "tried": tried}
 
 
 def previous_website(envelope: dict[str, Any]) -> dict[str, Any] | None:
@@ -399,7 +502,7 @@ def research_discovery(profile: dict[str, Any]) -> None:
                 assessment.update({"status": "exact", "publishable": True, "method": "previously_verified_recheck_v1",
                                    "score": max(float(assessment.get("score") or 0), 0.93),
                                    "reasons": [*assessment.get("reasons", []), f"re-verified site from previous run (markers: {sorted(markers)})"]})
-                value["social_links"] = [{"platform": item["platform"], "url": item["url"]} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
+                value["social_links"] = [{key: item[key] for key in ("platform", "url", "declared_in") if key in item} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
                 value["discovery_method"] = known.get("discovery") or "previously_verified"
                 profile["evidence"]["website"] = gated
                 return
@@ -408,6 +511,9 @@ def research_discovery(profile: dict[str, Any]) -> None:
             profile["evidence"]["website"] = record
             return
     profile["domain_guess"] = discover_by_domain_guess(profile)
+    website = profile["evidence"].get("website") or {}
+    if not ((website.get("value") or {}).get("identity_assessment") or {}).get("publishable"):
+        profile["search"] = discover_by_search(profile)
 
 
 def research_company(profile: dict[str, Any]) -> dict[str, Any]:
@@ -418,7 +524,7 @@ def research_company(profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def _guarded(step: Callable[[dict[str, Any]], None], profile: dict[str, Any]) -> None:
-    started = time.monotonic()
+    started, requests_before = time.monotonic(), thread_requests()
     try:
         step(profile)
     except BudgetExhausted as exc:
@@ -426,6 +532,7 @@ def _guarded(step: Callable[[dict[str, Any]], None], profile: dict[str, Any]) ->
     except Exception as exc:
         profile["errors"].append({"source": step.__name__, "error": f"{type(exc).__name__}: {exc}", "trace": traceback.format_exc(limit=3)})
     profile["runtime_ms"] = int(profile.get("runtime_ms") or 0) + int((time.monotonic() - started) * 1000)
+    profile["requests"] = int(profile.get("requests") or 0) + thread_requests() - requests_before
 
 
 def run_phase(
@@ -569,6 +676,9 @@ def run_batch(
         # Scale the request budget with the batch (old contract: 2,000 per 100 companies), with margin.
         max_requests = max(200, int(requests_per_company * max(1, len(orgs))))
     set_accounts_lanes(accounts_lanes)
+    set_raw_store(state)  # raw responses behind every claim are kept under <state>/raw
+    search_cost = float(os.environ.get("SIGNALPOST_SEARCH_COST_PER_QUERY", 0.005))
+    reset_search_quota(int(os.environ.get("SIGNALPOST_SEARCH_MAX_QUERIES", len(orgs))) if search_api_key() else 0)
     budget = set_active_budget(RequestBudget(max_requests=max_requests, deadline_seconds=deadline_minutes * 60, reserve=40))
     report_limits = {"max_requests": max_requests, "deadline_minutes": deadline_minutes, "workers": workers, "accounts_lanes": accounts_lanes}
     log(f"{run_id}: {len(orgs)} organisation numbers ({len(invalid)} invalid rows)")
@@ -645,7 +755,9 @@ def run_batch(
         profile = profiles.get(org) or {"organisation_number": org, "evidence": {}, "errors": [], "fatal_error": "not researched"}
         run_meta = {"run_id": run_id, "agent_version": AGENT_VERSION, "started_at": started_at, "completed_at": completed_at, "terminal_status": "completed"}
         try:
-            envelope = build_envelope(profile, run=run_meta, operations={"runtime_ms": profile.get("runtime_ms"), "third_party_cost_usd": 0})
+            envelope = build_envelope(profile, run=run_meta, operations={
+                "requests": int(profile.get("requests") or 0), "runtime_ms": profile.get("runtime_ms"),
+                "third_party_cost_usd": round(int(profile.get("search_queries") or 0) * search_cost, 4)})
             envelope = apply_refresh(previous_envelopes.get(org), envelope)
             envelope["summary"] = build_summary(envelope)
         except Exception as exc:
@@ -675,7 +787,10 @@ def run_batch(
         "claims": sum(len(envelope.get("claims") or []) for envelope in envelopes),
         "changes": sum(len(envelope.get("changes") or []) for envelope in envelopes),
         "budget": budget.report(),
-        "third_party_cost_usd": 0.0,
+        "search": {"enabled": bool(search_api_key()), "queries": _search_quota.used, "max_queries": _search_quota.maximum, "cost_per_query_usd": search_cost},
+        "third_party_cost_usd": round(_search_quota.used * search_cost, 4),
+        "cost_per_company_usd": round(_search_quota.used * search_cost / max(1, len(envelopes)), 6),
+        "evidence": evidence_metrics(envelopes),
         "validation": {
             "exact_count": len(envelopes) == len(orgs) + len(invalid),
             "unique": len({envelope["organisation_number"] for envelope in envelopes}) == len(envelopes),
@@ -690,11 +805,33 @@ def run_batch(
     return report
 
 
+def evidence_metrics(envelopes: list[dict[str, Any]]) -> dict[str, Any]:
+    """How complete the evidence behind the published claims is, for the run report."""
+    totals = {"claims": 0, "with_source_and_retrieval_time": 0, "with_content_hash": 0, "with_quoted_span": 0, "with_locator": 0,
+              "with_stored_snapshot": 0, "accounts_claims": 0, "accounts_claims_with_reporting_period": 0}
+    for envelope in envelopes:
+        records = {item.get("evidence_id"): item for item in envelope.get("evidence") or []}
+        for claim in envelope.get("claims") or []:
+            sources = [records[key] for key in claim.get("evidence_ids") or [] if key in records]
+            totals["claims"] += 1
+            totals["with_source_and_retrieval_time"] += bool(sources) and all(item.get("source_url") and item.get("retrieved_at") for item in sources)
+            totals["with_content_hash"] += any(item.get("content_sha256") for item in sources)
+            totals["with_quoted_span"] += bool(claim.get("claim_span"))
+            totals["with_locator"] += bool(claim.get("locator"))
+            totals["with_stored_snapshot"] += any(item.get("snapshot_path") for item in sources)
+            if claim.get("family") == "annual_accounts":
+                totals["accounts_claims"] += 1
+                totals["accounts_claims_with_reporting_period"] += bool(claim.get("reporting_period"))
+    return totals
+
+
 def _safe(function: Callable[..., Any], profile: dict[str, Any], *args: Any) -> None:
+    requests_before = thread_requests()
     try:
         function(profile, *args)
     except Exception as exc:
         profile.setdefault("errors", []).append({"source": function.__name__, "error": f"{type(exc).__name__}: {exc}"})
+    profile["requests"] = int(profile.get("requests") or 0) + thread_requests() - requests_before
 
 
 def write_outputs(out: Path, state: Path, run_id: str, envelopes: list[dict[str, Any]]) -> None:

@@ -22,6 +22,7 @@ import trafilatura
 from .budget import active_budget
 from .evidence import evidence
 from .http import USER_AGENT
+from .rawstore import save_raw
 SOCIAL_HOSTS = {
     "linkedin.com": "linkedin",
     "facebook.com": "facebook",
@@ -139,6 +140,113 @@ def _social_links(base_url: str, soup: BeautifulSoup) -> list[dict[str, str]]:
             continue
         found[(normalized["platform"], normalized["url"])] = normalized
     return sorted(found.values(), key=lambda item: (item["platform"], item["url"]))
+
+
+def page_social_links(html: str, base_url: str, soup: BeautifulSoup | None = None) -> list[dict[str, str]]:
+    """Profiles a page links to or declares as its own: anchors, Organization ``sameAs`` and publisher meta."""
+    soup = soup or BeautifulSoup(html, "lxml")
+    found: dict[tuple[str, str], dict[str, str]] = {}
+
+    def add(items: list[dict[str, str]], declared_in: str) -> None:
+        for item in items:
+            found.setdefault((item["platform"], item["url"].casefold()), {**item, "declared_in": declared_in})
+
+    add(_social_links(base_url, soup), "a[href]")
+    for node in soup.select('script[type="application/ld+json"]'):
+        try:
+            add(structured_social_links(json.loads(node.string or node.get_text() or "null")), "ld+json:sameAs")
+        except (ValueError, TypeError):
+            continue
+    for selector in ('meta[property="article:publisher"]', 'meta[property="og:see_also"]'):
+        for node in soup.select(selector):
+            normalized = normalize_social_url(str(node.get("content") or "").strip())
+            if normalized:
+                add([normalized], selector)
+    return sorted(found.values(), key=lambda item: (item["platform"], item["url"]))
+
+
+BOT_CHALLENGE_TITLES = (
+    "just a moment", "verifying", "attention required", "access denied", "please wait", "checking your browser",
+    "ddos-guard", "are you a robot", "pardon our interruption", "security check", "one moment, please",
+)
+
+
+def is_bot_challenge(title: str, text: str) -> bool:
+    """A bot-protection interstitial instead of the site: a stock title and next to no content."""
+    lowered = str(title or "").casefold().strip().rstrip(".!… ").strip()
+    return len(str(text or "").strip()) < 200 and any(lowered == stock or lowered.startswith(stock + " |") or lowered.startswith(stock + " -") or lowered.startswith(stock + "!")
+                                                      for stock in BOT_CHALLENGE_TITLES)
+
+
+def declared_feed_url(html: str, page_url: str, soup: BeautifulSoup | None = None) -> str | None:
+    """The site's own RSS/Atom feed as declared in the page head (same registered domain, not a comments feed)."""
+    soup = soup or BeautifulSoup(html, "lxml")
+    domain = _registered_domain(page_url)
+    for node in soup.select('link[rel~="alternate"][href]'):
+        kind = str(node.get("type") or "").casefold()
+        if "rss+xml" not in kind and "atom+xml" not in kind:
+            continue
+        url = urllib.parse.urljoin(page_url, str(node.get("href")).strip())
+        if "comment" in url.casefold() or "comment" in str(node.get("title") or "").casefold():
+            continue
+        if urllib.parse.urlparse(url).scheme in {"http", "https"} and _registered_domain(url) == domain:
+            return url
+    return None
+
+
+def feed_items(xml_text: str, feed_url: str, limit: int = 12) -> list[dict[str, Any]]:
+    """Dated posts from an RSS or Atom feed. Only items with an explicit date and a link on the feed's own domain."""
+    from email.utils import parsedate_to_datetime
+
+    from lxml import etree
+
+    try:
+        root = etree.fromstring(xml_text.encode("utf-8"), parser=etree.XMLParser(resolve_entities=False, no_network=True, recover=True, huge_tree=False))
+    except (etree.XMLSyntaxError, ValueError):
+        return []
+    if root is None:
+        return []
+    domain = _registered_domain(feed_url)
+    local = lambda node: etree.QName(node).localname if isinstance(node.tag, str) else ""  # noqa: E731
+    child_text = lambda node, *names: next((" ".join((child.text or "").split()) for child in node if local(child) in names and (child.text or "").strip()), "")  # noqa: E731
+    items: list[dict[str, Any]] = []
+    for node in root.iter():
+        kind = local(node)
+        if kind not in {"item", "entry"}:
+            continue
+        title = child_text(node, "title")
+        if kind == "item":
+            link, raw_date, locator = child_text(node, "link"), child_text(node, "pubDate", "date"), "rss:item/pubDate"
+            try:
+                date = parsedate_to_datetime(raw_date).date().isoformat() if raw_date and not DATE_PATTERN.match(raw_date) else _iso_date(raw_date)
+            except (TypeError, ValueError):
+                date = None
+        else:
+            links = [child for child in node if local(child) == "link" and child.get("href")]
+            link = next((child.get("href") for child in links if child.get("rel") in (None, "alternate")), links[0].get("href") if links else "")
+            date, locator = _iso_date(child_text(node, "published", "updated")), "atom:entry/published"
+        date = _iso_date(date)  # also rejects dates in the future
+        url = urllib.parse.urljoin(feed_url, link) if link else ""
+        if not (title and date and url) or _registered_domain(url) != domain:
+            continue
+        items.append({"date": date, "title": title[:200], "url": url.split("#", 1)[0], "locator": locator})
+    return sorted(items, key=lambda item: item["date"], reverse=True)[:limit]
+
+
+def _fetch_feed(url: str, *, timeout: float) -> tuple[list[dict[str, Any]], int]:
+    """One bounded request for the declared feed; any failure simply yields no items."""
+    if not _robots_allowed(url, timeout):
+        return [], 1
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.5"})
+    try:
+        with _open(request, timeout=timeout) as response:
+            raw = response.read(1_000_001)
+            if len(raw) > 1_000_000 or _registered_domain(response.geturl()) != _registered_domain(url):
+                return [], 2
+        save_raw(__import__("hashlib").sha256(raw).hexdigest(), raw)
+        return feed_items(raw.decode("utf-8", errors="replace"), url), 2
+    except Exception:
+        return [], 2
 
 
 def structured_social_links(value: Any) -> list[dict[str, str]]:
@@ -353,6 +461,31 @@ def identity_markers(html: str, identity: dict[str, Any] | None) -> list[str]:
     return found
 
 
+def marker_snippets(html: str, identity: dict[str, Any] | None) -> dict[str, str]:
+    """The page text around each registry marker, so a reader can see the proof without opening the page."""
+    if not identity:
+        return {}
+    text = " ".join(re.sub(r"&nbsp;|&#160;|\u00a0", " ", re.sub(r"<[^>]+>", " ", re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", html))).split())
+    snippets: dict[str, str] = {}
+
+    def around(match: re.Match[str] | None, marker: str) -> None:
+        if match and marker not in snippets:
+            snippets[marker] = text[max(0, match.start() - 60):match.end() + 40].strip()
+
+    spaced = lambda digits: r"[\s.\-]?".join(re.escape(char) for char in digits)  # noqa: E731
+    org = str(identity.get("organisation_number") or "")
+    if len(org) == 9:
+        around(re.search(spaced(org), text), "organisation_number")
+    for phone in identity.get("phones") or []:
+        phone = re.sub(r"\D", "", str(phone))[-8:]
+        if len(phone) == 8:
+            around(re.search(spaced(phone), text), "phone")
+    postal, street = str(identity.get("postal_code") or ""), str(identity.get("street") or "")
+    if postal and street:
+        around(re.search(re.escape(street), text, re.I), "address")
+    return snippets
+
+
 def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max_bytes: int, identity: dict[str, Any] | None = None) -> tuple[dict[str, Any] | None, list[dict[str, str]], int, int, int, str | None]:
     if not _robots_allowed(url, timeout):
         return None, [], 1, 0, 0, "robots.txt disallows page"
@@ -370,8 +503,10 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
         page_html = raw.decode("utf-8", errors="replace")
         page_soup = BeautifulSoup(page_html, "lxml")
         page_text = trafilatura.extract(page_html, url=final_url, include_links=False, include_tables=False, favor_precision=True) or ""
+        save_raw(__import__("hashlib").sha256(raw).hexdigest(), raw)
         page = {
             "identity_markers": identity_markers(page_html, identity),
+            "identity_snippets": marker_snippets(page_html, identity),
             "category": page_category(url),
             "dated_items": dated_items(page_html, final_url, page_soup),
             "url": final_url,
@@ -379,7 +514,7 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
             "main_text_excerpt": page_text[:5000],
             "content_sha256": __import__("hashlib").sha256(raw).hexdigest(),
         }
-        return page, _social_links(final_url, page_soup), 2, len(raw), elapsed, None
+        return page, page_social_links(page_html, final_url, page_soup), 2, len(raw), elapsed, None
     except Exception as exc:
         return None, [], 2, 0, int((time.monotonic() - started) * 1000), f"{type(exc).__name__}: {str(exc)[:120]}"
 
@@ -444,6 +579,9 @@ def fetch_website(
         structured = extruct.extract(html, base_url=final_url, syntaxes=["json-ld", "microdata", "opengraph"])
         text = trafilatura.extract(html, url=final_url, include_links=False, include_tables=False, favor_precision=True) or ""
         title = soup.title.get_text(" ", strip=True) if soup.title else ""
+        if is_bot_challenge(title, text):
+            return evidence("website", "blocked", "registry_linked_company_website", normalized, note=f"bot-protection page instead of the site (title: {title[:60]})"), {"requests": 2, "bytes": len(raw), "latencies_ms": [elapsed]}
+        save_raw(__import__("hashlib").sha256(raw).hexdigest(), raw)
         description_tag = soup.select_one('meta[name="description"], meta[property="og:description"]')
         description = str(description_tag.get("content") or "").strip() if description_tag else ""
         value = {
@@ -453,7 +591,7 @@ def fetch_website(
             "title": title[:500],
             "description": description[:2000],
             "main_text_excerpt": text[:5000],
-            "social_links": _social_links(final_url, soup),
+            "social_links": page_social_links(html, final_url, soup),
             "structured_organisations": _jsonld_organisations(structured),
             "content_sha256": __import__("hashlib").sha256(raw).hexdigest(),
             "extraction_state": _extraction_state(text, soup),
@@ -467,6 +605,7 @@ def fetch_website(
         page_latencies = [elapsed]
         homepage_domain = value["registered_domain"]
         value["identity_markers"] = {final_url: identity_markers(html, identity)} if identity else {}
+        value["identity_snippets"] = {final_url: marker_snippets(html, identity)} if identity else {}
         for page_url in _priority_links(final_url, soup, limit=max_pages):
             page, page_social, page_requests, page_bytes, page_elapsed, page_error = _fetch_secondary_page(
                 page_url,
@@ -483,12 +622,19 @@ def fetch_website(
                 pages.append(page)
                 if page.get("identity_markers"):
                     value["identity_markers"][page["url"]] = page["identity_markers"]
+                    value["identity_snippets"][page["url"]] = page.get("identity_snippets") or {}
                 social.extend(page_social)
             elif page_error:
                 crawl_errors.append({"url": page_url, "error": page_error})
         value["pages"] = pages
+        feed_news: list[dict[str, Any]] = []
+        feed_url = declared_feed_url(html, final_url, soup) if max_pages else None
+        if feed_url:
+            feed_news, feed_requests = _fetch_feed(feed_url, timeout=timeout)
+            requests += feed_requests
+            value["feed_url"] = feed_url
         news: dict[str, dict[str, Any]] = {}
-        for item in dated_items(html, final_url, soup) + [item for page in pages[1:] for item in page.get("dated_items") or []]:
+        for item in feed_news + dated_items(html, final_url, soup) + [item for page in pages[1:] for item in page.get("dated_items") or []]:
             news.setdefault(item["title"].casefold() + item["date"], item)
         value["news_items"] = sorted(news.values(), key=lambda item: item["date"], reverse=True)[:12]
         value["careers_pages"] = [page["url"] for page in pages[1:] if page.get("category") == "careers"]
