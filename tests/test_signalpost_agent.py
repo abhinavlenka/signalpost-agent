@@ -961,3 +961,32 @@ def test_hosting_placeholders_are_never_published_as_the_company_website(title, 
 
     assessment = assess_website_identity(gate_profile("VHELP AS", title=title, text=text, markers=[], registry_listed=True, host="http://www.vhelp.as/"))
     assert assessment["publishable"] is False and "placeholder" in assessment["reasons"][0]
+
+
+@pytest.mark.parametrize("url, careers", [
+    ("https://career.kitron.com/", True), ("https://karriere.aas.no/", True), ("https://jobs.aas.no/ledig", True),
+    ("https://www.kitron.com/", False), ("https://career-guide.example.no/", False),
+])
+def test_a_careers_subdomain_is_a_careers_page(url, careers):
+    from norway_company_agent.website import page_category
+
+    assert (page_category(url) == "careers") is careers
+
+
+def test_published_website_host_is_lower_case():
+    envelope = build_envelope(website_profile("https://Murhandtverk.no/Om-Oss"), run=RUN)
+    assert [c["value"] for c in envelope["claims"] if c["field"] == "official_website"] == ["https://murhandtverk.no/Om-Oss"]
+
+
+def test_small_batches_still_get_website_discovery(monkeypatch):
+    from norway_company_agent import pipeline
+
+    set_active_budget(RequestBudget(max_requests=209))  # an 11-company batch
+    try:
+        monkeypatch.setattr(pipeline, "resolve_many", lambda hosts, timeout=4.0: set(hosts))
+        monkeypatch.setattr(pipeline, "fetch_website", lambda url, **kwargs: site_record("https://www.aaselektronikk.no/", title="Aas Elektronikk AS", markers=["organisation_number"]))
+        p = search_profile()
+        result = pipeline.discover_by_domain_guess(p)
+    finally:
+        set_active_budget(None)
+    assert "skipped" not in result and result["tried"][-1]["result"] == "verified"

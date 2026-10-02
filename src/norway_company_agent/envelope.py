@@ -465,13 +465,14 @@ def build_leadership(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
 
 
 def _without_default_port(url: str | None) -> str | None:
-    """Drop an explicit :443/:80 that some servers add on redirect; the evidence keeps the fetched URL."""
+    """The published form of a site URL: lower-case host, no explicit default port. The evidence keeps the fetched URL."""
     if not url:
         return url
     parsed = urllib.parse.urlsplit(url)
-    if parsed.port != {"https": 443, "http": 80}.get(parsed.scheme):
-        return url
-    return urllib.parse.urlunsplit(parsed._replace(netloc=parsed.netloc.rsplit(":", 1)[0]))
+    netloc = parsed.netloc.lower()  # host names are case-insensitive; the path is not
+    if parsed.port == {"https": 443, "http": 80}.get(parsed.scheme.lower()):
+        netloc = netloc.rsplit(":", 1)[0]
+    return urllib.parse.urlunsplit(parsed._replace(scheme=parsed.scheme.lower(), netloc=netloc))
 
 
 def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:

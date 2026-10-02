@@ -282,6 +282,11 @@ def resolve_many(hosts: list[str], timeout: float = 4.0) -> set[str]:
     return {host for host, future in futures.items() if future in done and future.result()}
 
 
+def _discovery_reserve() -> int:
+    """Requests kept back for mandatory sources before optional discovery may spend: 300, or 15% of a small batch's budget."""
+    return min(300, int(active_budget().max_requests * 0.15))
+
+
 def discover_by_domain_guess(profile: dict[str, Any]) -> dict[str, Any] | None:
     """Website discovery from the registry e-mail domain and name-derived domains.
 
@@ -294,7 +299,7 @@ def discover_by_domain_guess(profile: dict[str, Any]) -> dict[str, Any] | None:
     live = ((profile["evidence"].get("registry_live") or {}).get("value")) or {}
     if str(profile.get("legal_form") or "").upper() in SKIP_GUESS_FORMS or live.get("bankrupt") or live.get("liquidating"):
         return {"skipped": "legal form or status unlikely to have an own website"}
-    if active_budget().remaining < 300:
+    if active_budget().remaining < _discovery_reserve():
         return {"skipped": "request budget reserved for mandatory sources"}
     candidates: list[tuple[str, str]] = []
     email_domain = live.get("_email_domain")
@@ -425,7 +430,7 @@ def discover_by_search(profile: dict[str, Any], *, search: Callable[[str, str], 
     api_key = search_api_key()
     if not api_key:
         return None
-    if active_budget().remaining < 300:
+    if active_budget().remaining < _discovery_reserve():
         return {"skipped": "request budget reserved for mandatory sources"}
     try:
         query = build_company_search_query(profile)

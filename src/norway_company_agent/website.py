@@ -399,9 +399,13 @@ def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 5) -> list[
     return list(dict.fromkeys(ordered))[:limit]
 
 
+CAREERS_HOSTS = {"career", "careers", "karriere", "jobb", "jobs", "job"}
+
+
 def page_category(url: str) -> str | None:
-    path = urllib.parse.urlparse(url).path.casefold()
-    if CAREERS_PATH.search(path):
+    parsed = urllib.parse.urlparse(url)
+    path = parsed.path.casefold()
+    if CAREERS_PATH.search(path) or (parsed.hostname or "").casefold().split(".")[0] in CAREERS_HOSTS:  # career.example.com
         return "careers"
     return next((category for category, terms in PAGE_CATEGORIES if category != "careers" and _matches_category(category, terms, path)), None)
 
