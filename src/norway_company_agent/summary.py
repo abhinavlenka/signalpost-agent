@@ -124,8 +124,13 @@ def build_summary(envelope: dict[str, Any]) -> dict[str, Any]:
         say("business", f"Its own website describes it as: “{str(brand['value'])[:240]}” (company-reported).", brand)
 
     # ---- finances: latest filed year, then the change from the year before
+    # Company and group accounts are different things: every figure in the finance sentences comes
+    # from the account type of the latest filed period.
+    account_claims = [claim for (family, _), items in by_field.items() if family == "annual_accounts" for claim in items if claim.get("reporting_period")]
+    account_type = (max(account_claims, key=lambda claim: claim["reporting_period"])["value"] or {}).get("account_type") if account_claims else None
+
     def by_period(field: str) -> dict[str, dict[str, Any]]:
-        return {claim.get("reporting_period") or "": claim for claim in by_field.get(("annual_accounts", field), [])}
+        return {claim.get("reporting_period") or "": claim for claim in by_field.get(("annual_accounts", field), []) if (claim["value"] or {}).get("account_type") == account_type}
 
     revenue, result, equity, assets = by_period("revenue"), by_period("annual_result"), by_period("equity"), by_period("assets")
     periods = sorted({period for series in (revenue, result, equity, assets) for period in series if period}, reverse=True)

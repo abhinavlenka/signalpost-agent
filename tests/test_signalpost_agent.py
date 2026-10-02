@@ -747,3 +747,11 @@ def test_feed_on_a_private_host_is_never_fetched(monkeypatch):
     monkeypatch.setattr(website, "_robots_allowed", lambda url, timeout: True)
     assert website._fetch_feed("http://127.0.0.1/feed/", timeout=1.0) == ([], 0)
     assert opened == []
+
+
+def test_trend_never_compares_group_accounts_with_company_accounts():
+    p = accounts_profile([(2025, {"revenue": 5000000.0, "annual_result": 100000.0}), (2024, {"revenue": 1000000.0, "annual_result": 50000.0})])
+    p["evidence"]["financials"]["value"]["records"][0]["account_type"] = "KONSERN"  # latest year is the group; the year before is the company alone
+    summary, _ = summary_of(p)
+    assert "Revenue rose" not in summary["text"] and "The net result rose" not in summary["text"]
+    assert "Filed accounts for the period ending 2025-12-31 show revenue of NOK 5.0 m" in summary["text"]
