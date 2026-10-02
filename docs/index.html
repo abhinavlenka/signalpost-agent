@@ -72,6 +72,21 @@ main.has-bar { padding-bottom: 96px; }
 .tools { display: flex; gap: var(--s2) var(--s3); align-items: center; }
 .sort { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 select { min-height: var(--tap); padding: 0 8px; border: 1px solid var(--control); border-radius: 8px; background: var(--surface); font-size: 14px; }
+details.adv { flex: 1 1 100%; }
+details.adv > summary { cursor: pointer; display: inline-flex; align-items: center; min-height: var(--tap); font-size: 13px; color: var(--accent); }
+.advgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--s3); padding: var(--s3) 0 var(--s1); max-width: 860px; }
+.advgrid label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.advgrid input, .advgrid select { min-height: var(--tap); padding: 0 10px; border: 1px solid var(--control); border-radius: 8px; background: var(--surface); font-size: 16px; width: 100%; }
+.fp { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0; margin-top: var(--s4); }
+.fp > div { padding: var(--s3) var(--s4); border-right: 1px solid var(--line); min-width: 0; }
+.fp > div:last-child { border-right: 0; }
+.fp h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
+.fp p { margin: 0 0 2px; font-size: 14px; }
+details.menu { position: relative; }
+details.menu > summary { list-style: none; } details.menu > summary::-webkit-details-marker { display: none; }
+details.menu .pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 10; display: grid; gap: 4px; padding: var(--s2); min-width: 220px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+details.menu .pop .btn { justify-content: flex-start; border-color: transparent; }
+.sec { font-weight: 650; }
 .meta { color: var(--muted); font-size: 13px; margin: 0 0 var(--s3); display: flex; justify-content: space-between; gap: var(--s2) var(--s4); flex-wrap: wrap; align-items: center; }
 .legend { display: inline-flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -167,6 +182,8 @@ table.cmp .top { font-weight: 700; }
 @media (max-width: 1040px) { .chips { flex-basis: 100%; } table.list .hide-t { display: none; } .dots { gap: 2px; } .dot { width: 8px; height: 8px; } .cov { gap: 6px; } }
 @media (max-width: 768px) {
   body { font-size: 16px; }
+  .fp > div { border-right: 0; border-bottom: 1px solid var(--line); } .fp > div:last-child { border-bottom: 0; }
+  details.menu .pop { right: auto; left: 0; }
   .bar { flex-wrap: wrap; gap: var(--s2); }
   .brand { flex: 1 1 auto; }
   .search { order: 3; flex-basis: 100%; }
@@ -216,15 +233,19 @@ const FAMILIES = {legal_identity:"Legal identity", public_brand:"Public brand", 
 const SECTION_TITLES = {legal_identity:"Legal identity and public brand", annual_accounts:"Annual accounts and history", leadership_workplaces:"Leadership and registered workplaces", web_presence:"Official website and company-owned profiles", hiring_activity:"Hiring and dated public activity"};
 const SECTION_SHORT = {legal_identity:"Identity", annual_accounts:"Accounts", leadership_workplaces:"Leadership", web_presence:"Web presence", hiring_activity:"Hiring and activity"};
 const STATE_LABEL = {available:"available", not_available:"not found", blocked:"blocked", not_applicable:"not applicable", ambiguous:"ambiguous", failed:"failed"};
-const SOURCE_LABEL = {official_registry_live:"Brønnøysund register", official_annual_accounts:"Annual accounts register", official_roles:"Register of roles", official_subunits:"Register of sub-units", official_group_structure:"Group structure register", official_role_update_log:"Role update log", official_job_register_nav:"NAV job register", registry_linked_company_website:"Company website (listed in the register)", employer_declared_homepage:"Company website (declared in a NAV ad)", registry_email_domain:"Company website (register e-mail domain)", name_derived_domain:"Company website (name-derived domain)", frozen_universe_snapshot:"Builderr universe snapshot"};
-const SCOPE_LABEL = {exact_entity_verified_by_organisation_number:"Verified: organisation number is on the site", norwegian_domain:"Verified by legal name; Norwegian domain", possibly_group_or_international:"Possibly a group or international site", page_on_third_party_site:"A page on a third-party site (chain, directory or platform)"};
+const SOURCE_LABEL = {official_registry_live:"Brønnøysund register", official_annual_accounts:"Annual accounts register", official_roles:"Register of roles", official_subunits:"Register of sub-units", official_group_structure:"Group structure register", official_role_update_log:"Role update log", official_job_register_nav:"NAV job register", registry_linked_company_website:"Company website (listed in the register)", employer_declared_homepage:"Company website (declared in a NAV ad)", registry_email_domain:"Company website (register e-mail domain)", name_derived_domain:"Company website (name-derived domain)", search_discovered_website:"Company website (found by search, verified on the site)", frozen_universe_snapshot:"Builderr universe snapshot"};
+const SCOPE_LABEL = {exact_entity_verified_by_organisation_number:"Verified: organisation number is on the site", norwegian_domain:"Verified by legal name; Norwegian domain", possibly_group_or_international:"Possibly a group or international site", page_on_third_party_site:"A page on a third-party site (chain, directory or platform)", verified_by_registered_address_or_phone:"Verified: registered address or phone is on the site", public_company_own_site:"Verified by legal name; corporate site of a Norwegian public company"};
 const ACCOUNT_ROWS = [["revenue","Revenue"],["operating_result","Operating result"],["profit_before_tax","Profit before tax"],["annual_result","Net result"],["assets","Total assets"],["equity","Equity"],["debt","Debt"]];
-const FILTERS = {w:["Verified website", r => r.w], j:["Hiring signal", r => (r.a||{}).jobs === "available"], x:["Company profiles", r => r.x], y:["News", r => r.y], r:["Reports revenue", r => r.r != null], c:["Changed", r => r.c]};
+const FILTERS = {w:["Verified website", r => r.w], j:["Hiring signal", r => (r.a||{}).jobs === "available"], x:["Company profiles", r => r.x], y:["News", r => r.y], r:["Reports revenue", r => r.r != null], pos:["Profitable", r => r.p > 0], c:["Changed", r => r.c], pin:["Pinned", r => pins.has(r.o)]};
 const SORTS = {cov:["Coverage (most first)", r => coverage(r), "desc"], name:["Name (A–Z)", r => (r.n||"").toLowerCase(), "asc"], rev:["Revenue (highest first)", r => r.r, "desc"], res:["Net result (highest first)", r => r.p, "desc"], emp:["Employees (most first)", r => r.e, "desc"]};
 const PAGE = 100, MAX_COMPARE = 4;
 
 let rows = [], cache = {}, selected = new Set();
-let state = {q: "", f: new Set(), s: "cov", d: "desc", shown: PAGE};
+let state = {q: "", f: new Set(), s: "cov", d: "desc", shown: PAGE, m: "", lf: "", emp: "", rev: ""};
+const ADVANCED = ["m", "lf", "emp", "rev"];
+let pins = new Set();
+try { pins = new Set(JSON.parse(localStorage.getItem("sp-pins") || "[]")); } catch (e) {}
+const savePins = () => { try { localStorage.setItem("sp-pins", JSON.stringify([...pins])); } catch (e) {} };
 let lastKind = null, listScroll = 0;
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
@@ -270,6 +291,7 @@ function listHash() {
   if (state.q) p.set("q", state.q);
   if (state.f.size) p.set("f", [...state.f].join(","));
   if (state.s !== "cov" || state.d !== "desc") { p.set("s", state.s); p.set("d", state.d); }
+  ADVANCED.forEach(k => { if (state[k] !== "") p.set(k, state[k]); });
   const qs = p.toString();
   return "#/" + (qs ? "?" + qs : "");
 }
@@ -279,6 +301,8 @@ function readListHash(h) {
   state.f = new Set((p.get("f") || "").split(",").filter(k => FILTERS[k]));
   state.s = SORTS[p.get("s")] ? p.get("s") : "cov";
   state.d = p.get("d") === "asc" || p.get("d") === "desc" ? p.get("d") : SORTS[state.s][2];
+  state.m = p.get("m") || ""; state.lf = p.get("lf") || "";
+  state.emp = /^\d+$/.test(p.get("emp") || "") ? p.get("emp") : ""; state.rev = /^\d+(\.\d+)?$/.test(p.get("rev") || "") ? p.get("rev") : "";
   if ($("#q").value !== state.q) $("#q").value = state.q;
 }
 function listChanged(resetPaging = true) {
@@ -288,7 +312,9 @@ function listChanged(resetPaging = true) {
 }
 function filtered() {
   const q = state.q.trim().toLowerCase();
-  const list = rows.filter(r => (!q || [r.n, r.o, r.m, r.i, r.w, ...(r.l||[])].some(v => String(v||"").toLowerCase().includes(q))) && [...state.f].every(k => FILTERS[k][1](r)));
+  const list = rows.filter(r => (!q || [r.n, r.o, r.m, r.i, r.w, ...(r.l||[])].some(v => String(v||"").toLowerCase().includes(q))) && [...state.f].every(k => FILTERS[k][1](r))
+    && (!state.m || String(r.m||"").toLowerCase() === state.m.toLowerCase()) && (!state.lf || r.f === state.lf)
+    && (state.emp === "" || (r.e ?? -1) >= +state.emp) && (state.rev === "" || (r.r ?? -Infinity) >= +state.rev * 1e6));
   const get = SORTS[state.s][1], dir = state.d === "asc" ? 1 : -1;
   return list.sort((a, b) => { const x = get(a), y = get(b); if (x == null || x === "") return (y == null || y === "") ? 0 : 1; if (y == null || y === "") return -1; return (x < y ? -1 : x > y ? 1 : 0) * dir || String(a.n).localeCompare(String(b.n)); });
 }
@@ -304,7 +330,9 @@ function sortTh(key, label, cls = "") {
 function renderList() {
   const list = filtered(), shown = list.slice(0, state.shown);
   const counts = Object.fromEntries(Object.entries(FILTERS).map(([k, [, test]]) => [k, rows.filter(test).length]));
-  const active = [...state.f].map(k => FILTERS[k][0]);
+  const advanced = [state.m && `in ${state.m}`, state.lf && `legal form ${state.lf}`, state.emp !== "" && `at least ${state.emp} employees`, state.rev !== "" && `revenue of at least NOK ${state.rev} m`].filter(Boolean);
+  const active = [...[...state.f].map(k => FILTERS[k][0]), ...advanced];
+  const distinct = key => [...new Set(rows.map(r => r[key]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
   const emptyHtml = `<div class="empty"><h2>No companies match</h2><p>${state.q ? `Nothing matches “${esc(state.q)}”` : "Nothing matches"}${active.length ? ` with ${esc(active.join(", "))}` : ""}. Try a shorter name, an organisation number, or fewer filters.</p>
     <div class="actions">${state.q ? '<button class="btn" data-clear="q">Clear search</button>' : ""}${active.length ? '<button class="btn" data-clear="f">Clear filters</button>' : ""}</div></div>`;
   $("#app").innerHTML = `<h1 class="sr-only">Companies</h1>
@@ -312,12 +340,18 @@ function renderList() {
     <div class="chips" role="group" aria-label="Filters">${Object.entries(FILTERS).map(([k, [label]]) => `<button class="chip" data-f="${k}" aria-pressed="${state.f.has(k)}">${label} <span class="n">${counts[k]}</span></button>`).join("")}</div>
     <div class="tools"><label class="sort">Sort <select id="sort" aria-label="Sort companies by">${Object.entries(SORTS).map(([k, [label]]) => `<option value="${k}" ${state.s === k ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     <button class="btn" id="csv" ${list.length ? "" : "disabled"}>Export CSV</button></div>
+    <details class="adv" ${advanced.length ? "open" : ""}><summary>More filters${advanced.length ? ` (${advanced.length} active)` : ""}</summary><div class="advgrid">
+      <label>Municipality<input id="f-m" list="munis" value="${esc(state.m)}" placeholder="Any" autocomplete="off"><datalist id="munis">${distinct("m").map(m => `<option value="${esc(m)}">`).join("")}</datalist></label>
+      <label>Legal form<select id="f-lf"><option value="">Any</option>${distinct("f").map(f => `<option value="${esc(f)}" ${state.lf === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></label>
+      <label>Employees, at least<input id="f-emp" type="number" inputmode="numeric" min="0" step="1" value="${esc(state.emp)}" placeholder="Any"></label>
+      <label>Revenue, at least (NOK million)<input id="f-rev" type="number" inputmode="decimal" min="0" step="any" value="${esc(state.rev)}" placeholder="Any"></label>
+    </div></details>
   </div>
-  <p class="meta"><span>${list.length === rows.length ? `${rows.length} companies` : `${list.length} of ${rows.length} companies`}${selected.size ? ` · ${selected.size} selected to compare` : ""}</span>
+  <p class="meta"><span>${list.length === rows.length ? `${rows.length} companies` : `${list.length} of ${rows.length} companies`}${active.length ? ` matching ${esc(active.join(", "))}` : ""}${selected.size ? ` · ${selected.size} selected to compare` : ""}${active.length ? ' · <button class="btn" data-clear="f" style="min-height:28px">Clear filters</button>' : ""}</span>
     <span class="legend" aria-hidden="true">Coverage <span><span class="dot available"></span>available</span><span><span class="dot ambiguous"></span>ambiguous</span><span><span class="dot failed"></span>failed or blocked</span><span><span class="dot"></span>not found</span></span></p>
   <div class="card">${list.length ? `<table class="list"><thead><tr><th><span class="sr-only">Compare</span></th>${sortTh("name", "Company")}<th class="hide-m hide-t">Industry</th>${sortTh("rev", "Revenue (NOK)", "num")}${sortTh("res", "Net result", "num")}${sortTh("emp", "Employees", "num hide-m")}<th class="hide-m hide-t">Signals</th>${sortTh("cov", "Coverage")}</tr></thead><tbody>
   ${shown.map(r => `<tr data-o="${esc(r.o)}"><td class="pk"><label class="pick"><input type="checkbox" class="cmp" aria-label="Select ${esc(r.n)} to compare" data-o="${esc(r.o)}" ${selected.has(r.o) ? "checked" : ""}></label></td>
-    <td class="nm"><a class="name" href="#/c/${esc(r.o)}">${esc(r.n)}</a><div class="sub">${esc([r.o, r.f, r.m].filter(Boolean).join(" · "))}</div></td>
+    <td class="nm"><a class="name" href="#/c/${esc(r.o)}">${esc(r.n)}</a><div class="sub">${esc([r.o, r.f, r.m].filter(Boolean).join(" · "))}${pins.has(r.o) ? ' · <span class="badge">pinned</span>' : ""}</div></td>
     <td class="hide-m hide-t sub">${esc(r.i||"—")}</td><td class="num" data-l="Revenue">${money(r.r)}</td><td class="num" data-l="Result">${money(r.p)}</td><td class="num hide-m">${r.e ?? "—"}</td>
     <td class="hide-m hide-t">${[r.w && '<span class="badge available">website</span>', r.j && `<span class="badge available">${r.j} open job${r.j>1?"s":""}</span>`, r.y && `<span class="badge">${r.y} news</span>`, r.c && `<span class="badge ambiguous">${r.c} change${r.c>1?"s":""}</span>`].filter(Boolean).join(" ") || '<span class="sub">—</span>'}</td>
     <td class="dt">${dots(r.a)}</td></tr>`).join("")}
@@ -328,15 +362,30 @@ function renderList() {
   $$(".chip[data-f]", app).forEach(b => b.onclick = () => { const f = b.dataset.f; state.f.has(f) ? state.f.delete(f) : state.f.add(f); listChanged(); $(`.chip[data-f="${f}"]`)?.focus(); });
   $$(".sortbtn", app).forEach(b => b.onclick = () => { const k = b.dataset.sort; state.d = state.s === k ? (state.d === "asc" ? "desc" : "asc") : SORTS[k][2]; state.s = k; listChanged(); $(`.sortbtn[data-sort="${k}"]`)?.focus(); });
   $("#sort").onchange = e => { state.s = e.target.value; state.d = SORTS[state.s][2]; listChanged(); $("#sort").focus(); };
-  $$("[data-clear]", app).forEach(b => b.onclick = () => { if (b.dataset.clear === "q") { state.q = ""; $("#q").value = ""; } else state.f.clear(); listChanged(); });
+  $$("[data-clear]", app).forEach(b => b.onclick = () => { if (b.dataset.clear === "q") { state.q = ""; $("#q").value = ""; } else { state.f.clear(); ADVANCED.forEach(k => state[k] = ""); } listChanged(); });
+  [["f-m", "m"], ["f-lf", "lf"], ["f-emp", "emp"], ["f-rev", "rev"]].forEach(([id, key]) => { $("#" + id).onchange = e => { state[key] = e.target.value.trim(); listChanged(); $("#" + id)?.focus(); }; });
   if ($("#more")) $("#more").onclick = () => { state.shown += PAGE; const y = scrollY; renderList(); scrollTo(0, y); };
   $("#csv").onclick = () => exportCsv(list);
   say(`${list.length} of ${rows.length} companies shown`);
   updateBar();
 }
+// Text scraped from websites must not run as a spreadsheet formula when the CSV is opened: prefix such cells with an apostrophe.
+function csvCell(v) {
+  let text = String(v ?? "");
+  if (typeof v !== "number" && /^[=+\-@\t\r]/.test(text)) text = "'" + text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], {type}));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  say(`Downloaded ${name}`);
+}
 function exportCsv(list) {
   const cols = [["organisation_number", r => r.o], ["legal_name", r => r.n], ["legal_form", r => r.f], ["municipality", r => r.m], ["industry", r => r.i], ["registered_employees", r => r.e], ["revenue_nok", r => r.r], ["net_result_nok", r => r.p], ["verified_website", r => r.w], ["open_jobs", r => r.j], ["company_profiles", r => r.x], ["news_items", r => r.y], ["changes", r => r.c], ["families_available", r => coverage(r)]];
-  const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const cell = csvCell;
   const text = [cols.map(c => c[0]).join(","), ...list.map(r => cols.map(c => cell(c[1](r))).join(","))].join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + text], {type: "text/csv;charset=utf-8"}));
@@ -386,8 +435,8 @@ function fmtValue(c) {
 }
 function evidenceHtml(c, evidence) {
   const lines = (c.evidence_ids||[]).map(id => { const e = evidence[id]; if (!e) return ""; const url = e.final_url || e.source_url;
-    return `<div class="ev"><span>Source: ${link(url, SOURCE_LABEL[e.source_class] || human(e.source_class || "source"))}${safeUrl(url) ? ` <span class="sub">(${esc(host(url))})</span>` : ""}</span><span>retrieved ${esc((e.retrieved_at||"").slice(0,16).replace("T"," "))} UTC</span>${e.content_sha256 ? `<span title="SHA-256 of the fetched content: ${esc(e.content_sha256)}">sha256 <code>${esc(e.content_sha256.slice(0,10))}</code></span>` : ""}${c.locator ? `<span>at <code>${esc(c.locator)}</code></span>` : ""}${e.from_previous_run ? "<span>from previous run</span>" : ""}</div>`; }).join("");
-  return lines + (c.claim_span ? `<div class="ev"><span>Proof: ${esc(c.claim_span)}</span></div>` : "") + (typeof c.confidence === "number" && c.confidence < 1 ? `<div class="ev"><span>Confidence ${Math.round(c.confidence*100)}%</span></div>` : "");
+    return `<div class="ev"><span title="${esc([e.rights && "Rights: " + e.rights, e.snapshot_path && "Raw snapshot: " + e.snapshot_path].filter(Boolean).join("\n"))}">Source: ${link(url, SOURCE_LABEL[e.source_class] || human(e.source_class || "source"))}${safeUrl(url) ? ` <span class="sub">(${esc(host(url))})</span>` : ""}</span><span>retrieved ${esc((e.retrieved_at||"").slice(0,16).replace("T"," "))} UTC</span>${e.content_sha256 ? `<span title="SHA-256 of the fetched content: ${esc(e.content_sha256)}">sha256 <code>${esc(e.content_sha256.slice(0,10))}</code></span>` : ""}${c.locator ? `<span>at <code>${esc(c.locator)}</code></span>` : ""}${e.from_previous_run ? "<span>from previous run</span>" : ""}</div>`; }).join("");
+  return lines + (c.claim_span ? `<div class="ev"><span title="${c.span_kind === "source_text" ? "Found verbatim in the fetched source" : "Written out from the parsed source value"}">${c.span_kind === "source_text" ? "Quoted source" : "Source value"}: <code>${esc(c.claim_span)}</code></span></div>` : "") + (typeof c.confidence === "number" && c.confidence < 1 ? `<div class="ev"><span>Confidence ${Math.round(c.confidence*100)}%</span></div>` : "");
 }
 function claimsTable(org, claims, evidence, limit = 8) {
   const collapsed = claims.length > limit + 2;
@@ -408,7 +457,10 @@ async function renderCompany(org) {
   const first = (family, field) => claims.find(c => c.family === family && c.field === field && !c.stale);
   const latest = field => claims.filter(c => c.family === "annual_accounts" && c.field === field && !c.stale).sort((a, b) => (b.reporting_period||"").localeCompare(a.reporting_period||""))[0];
   const s = env.summary || {};
-  const summary = (s.sentences||[]).map(x => `${esc(x.text)}${(x.claim_ids||[]).slice(0,4).map((id, i) => `<a class="cite" href="#/c/${esc(org)}/${esc(id)}" aria-label="Evidence ${i+1} for this sentence">${i+1}</a>`).join("")}`).join(" ");
+  const sentence = x => `${esc(x.text)}${(x.claim_ids||[]).slice(0,4).map((id, i) => `<a class="cite" href="#/c/${esc(org)}/${esc(id)}" aria-label="Evidence ${i+1} for this sentence">${i+1}</a>`).join("")}`;
+  const summary = (s.sections||[]).length
+    ? s.sections.map(sec => `<p><span class="sec">${esc(sec.title)}.</span> ${(s.sentences||[]).filter(x => x.section === sec.key).map(sentence).join(" ")}</p>`).join("")
+    : `<p>${(s.sentences||[]).map(sentence).join(" ") || "No supported facts."}</p>`;
   const bySection = {};
   claims.forEach(c => (bySection[c.section] = bySection[c.section] || []).push(c));
   (bySection.hiring_activity || []).sort((a, b) => String(b.effective_date || (b.value||{}).date || "").localeCompare(String(a.effective_date || (a.value||{}).date || "")));
@@ -417,12 +469,27 @@ async function renderCompany(org) {
   const rev = latest("revenue"), res = latest("annual_result"), eq = latest("equity"), emp = first("legal_identity", "registered_employees"), founded = first("legal_identity", "founded_date"), web = first("official_website", "official_website");
   const year = c => c && c.reporting_period ? ` <span class="sub">${esc(c.reporting_period.slice(-10, -6))}</span>` : "";
   const states = Object.values(env.sections||{}).flatMap(sec => Object.entries(sec.fields||{}));
-  const inSel = selected.has(org);
+  const inSel = selected.has(org), pinned = pins.has(org);
+  const reason = family => { const st = states.find(([f]) => f === family); return st && st[1].reason ? `<p class="sub">${esc(st[1].reason)}</p>` : ""; };
+  const ev = c => `<a class="sub" href="#/c/${esc(org)}/${esc(c.claim_id)}">Show evidence</a>`;
+  const scope = first("public_brand", "website_scope"), profiles = claims.filter(c => c.family === "company_profiles" && !c.stale);
+  const openJobs = claims.filter(c => c.field === "open_job" && !c.stale), careers = first("jobs", "careers_page");
+  const news = claims.filter(c => c.field === "website_news" && !c.stale).sort((a, b) => String(b.effective_date||"").localeCompare(String(a.effective_date||"")));
+  const roleChange = claims.filter(c => c.field === "registered_role_change" && !c.stale).sort((a, b) => String(b.effective_date||"").localeCompare(String(a.effective_date||"")))[0];
+  const ceo = claims.find(c => c.family === "leadership" && c.field === "role" && !c.stale && c.value.role_code === "DAGL") || claims.find(c => c.family === "leadership" && c.field === "role" && !c.stale && c.value.role_code === "LEDE");
+  const footprint = `<section class="card fp" aria-label="External footprint">
+    <div><h3>Website</h3>${web ? `<p>${link(web.value, host(web.value))}</p><p class="sub">${esc(SCOPE_LABEL[scope?.value] || "")}</p>${ev(web)}` : `<p>${badge(env.availability?.official_website || "not_available")}</p>${reason("official_website")}`}</div>
+    <div><h3>Company profiles</h3>${profiles.length ? `<p>${profiles.map(c => link(c.value, c.field[0].toUpperCase() + c.field.slice(1))).join(" · ")}</p>${ev(profiles[0])}` : `<p>${badge(env.availability?.company_profiles || "not_available")}</p>${reason("company_profiles")}`}</div>
+    <div><h3>Hiring</h3>${openJobs.length ? `<p>${openJobs.length} open job${openJobs.length > 1 ? "s" : ""} in NAV</p><p class="sub">${esc(openJobs.slice(0, 2).map(c => c.value.title).join("; "))}</p>${ev(openJobs[0])}` : careers ? `<p>${link(careers.value, "Careers page")}</p>${ev(careers)}` : `<p>${badge(env.availability?.jobs || "not_available")}</p>${reason("jobs")}`}</div>
+    <div><h3>Latest dated activity</h3>${news.length ? `<p>${safeUrl(news[0].value.url) ? link(news[0].value.url, news[0].value.title) : esc(news[0].value.title)}</p><p class="sub">${esc(news[0].value.date)} · on the company site</p>${ev(news[0])}` : roleChange ? `<p>Roles updated in the register</p><p class="sub">${esc(roleChange.effective_date)}</p>${ev(roleChange)}` : `<p>${badge("not_available")}</p>`}</div>
+  </section>`;
   $("#app").innerHTML = `<article class="detail">
     <nav class="crumbs" aria-label="Breadcrumb"><a href="${listHash()}">← All companies</a></nav>
     <div class="headrow"><div><h1 tabindex="-1">${esc(env.legal_name || org)}</h1>
       <div class="sub">Org. no. ${esc(env.organisation_number)} · ${badge(env.state)} · run ${esc(env.run?.run_id)} · ${esc((env.run?.completed_at||"").slice(0,10))}</div></div>
       <div class="actions"><button class="btn" id="addcmp" aria-pressed="${inSel}">${inSel ? "Added to compare" : "Add to compare"}</button>
+      <button class="btn" id="pin" aria-pressed="${pinned}">${pinned ? "Pinned" : "Pin"}</button>
+      <details class="menu"><summary class="btn">Export</summary><div class="pop"><button class="btn" id="x-csv">Facts with evidence (CSV)</button><button class="btn" id="x-json">Full profile (JSON)</button></div></details>
       <a class="btn" href="https://virksomhet.brreg.no/nb/oppslag/enheter/${esc(org)}" target="_blank" rel="noopener noreferrer">Open in Brønnøysund register</a></div></div>
     <div class="tiles">
       ${tile("Revenue" + year(rev), rev ? "NOK " + money(rev.value.amount) : "—", rev)}
@@ -430,11 +497,12 @@ async function renderCompany(org) {
       ${tile("Equity" + year(eq), eq ? "NOK " + money(eq.value.amount) : "—", eq)}
       ${tile("Employees", emp ? esc(emp.value) : "—", emp)}
       ${tile("Founded", founded ? esc(founded.value) : "—", founded, true)}
-      ${tile("Website", web ? link(web.value, host(web.value)) : badge(env.availability?.official_website || "not_available"), web, true)}
+      ${tile(ceo && ceo.value.role_code === "LEDE" ? "Chair" : "CEO", ceo ? esc(ceo.value.name) : "—", ceo, true)}
     </div>
+    ${footprint}
     <nav class="jump" aria-label="Sections on this page">${Object.keys(env.sections||{}).map(key => `<button class="chip" data-jump="sec-${esc(key)}">${esc(SECTION_SHORT[key] || key)} <span class="n">${(bySection[key]||[]).length}</span></button>`).join("")}</nav>
     <div class="grid">
-      <section class="card pad summary" aria-labelledby="h-sum"><h2 id="h-sum">Summary</h2><p>${summary || "No supported facts."}</p>${s.changes_text ? `<p><strong>${esc(s.changes_text)}</strong></p>` : ""}${s.unknowns_text ? `<p class="sub">${esc(s.unknowns_text)}</p>` : ""}<p class="sub">Numbers in the text link to the evidence for that sentence.</p></section>
+      <section class="card pad summary" aria-labelledby="h-sum"><h2 id="h-sum">Summary</h2>${summary}${s.changes_text ? `<p><strong>${esc(s.changes_text)}</strong></p>` : ""}${s.unknowns_text ? `<p class="sub">${esc(s.unknowns_text)}</p>` : ""}<p class="sub">Numbers in the text link to the evidence for that sentence.</p></section>
       <section class="card pad" aria-labelledby="h-chg"><h2 id="h-chg">Changes since previous run</h2>${changes.length ? changes.map(ch => `<div class="change"><span class="badge ${ch.material ? "ambiguous" : ""}">${esc(human(ch.change_type))}</span> ${esc(FAMILIES[ch.family]||ch.family)}<div class="sub">${esc(JSON.stringify(ch.previous_value ?? "—")).slice(0,120)} → ${esc(JSON.stringify(ch.current_value ?? "—")).slice(0,120)}</div></div>`).join("") : `<p class="sub">${env.refresh?.mode === "diff" ? `No changes since run ${esc(env.refresh.previous_run_id || "")}.` : "First observation; there is no previous run."}</p>`}
       ${log.length > changes.length ? `<p class="sub">${log.length} changes recorded across all runs.</p>` : ""}
       <h2 style="margin-top:16px">Field states</h2><dl class="kv">${states.map(([f, st]) => `<dt>${esc(FAMILIES[f]||human(f))}</dt><dd>${badge(st.state)}${st.reason && st.state !== "available" ? `<div class="sub">${esc(st.reason)}</div>` : ""}</dd>`).join("")}</dl></section>
@@ -446,6 +514,14 @@ async function renderCompany(org) {
   </article>`;
   const app = $("#app");
   $("#addcmp").onclick = e => { const on = !selected.has(org); if (!toggleCompare(org, on)) return; e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.textContent = on ? "Added to compare" : "Add to compare"; say(on ? "Added to compare" : "Removed from compare"); };
+  $("#pin").onclick = e => { const on = !pins.has(org); on ? pins.add(org) : pins.delete(org); savePins(); e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.textContent = on ? "Pinned" : "Pin"; say(on ? "Pinned. Find pinned companies with the Pinned filter in the list." : "Unpinned"); };
+  $("#x-json").onclick = () => download(`signalpost-${org}.json`, JSON.stringify(env, null, 2), "application/json");
+  $("#x-csv").onclick = () => {
+    const cols = ["claim_id", "section", "family", "field", "value", "reporting_period", "effective_date", "confidence", "span", "span_kind", "locator", "source_url", "source_class", "retrieved_at", "content_sha256", "snapshot_path", "rights"];
+    const cell = csvCell;
+    const lines = claims.map(c => { const e = evidence[(c.evidence_ids||[])[0]] || {}; return [c.claim_id, c.section, c.family, c.field, typeof c.value === "object" ? JSON.stringify(c.value) : c.value, c.reporting_period, c.effective_date, c.confidence, c.claim_span, c.span_kind, c.locator, e.final_url || e.source_url, e.source_class, e.retrieved_at, e.content_sha256, e.snapshot_path, e.rights].map(cell).join(","); });
+    download(`signalpost-${org}-evidence.csv`, "\ufeff" + [cols.join(","), ...lines].join("\r\n"), "text/csv;charset=utf-8");
+  };
   $$("[data-jump]", app).forEach(b => b.onclick = () => { const el = document.getElementById(b.dataset.jump); if (el) { el.scrollIntoView({block: "start"}); $("h2", el)?.setAttribute("tabindex", "-1"); $("h2", el)?.focus({preventScroll: true}); } });
   $$("[data-expand]", app).forEach(b => b.onclick = () => { b.closest(".section").querySelector("table.claims").classList.remove("collapsed"); b.parentElement.remove(); });
   updateBar();
@@ -527,6 +603,8 @@ $("#q").oninput = e => {
   typing = setTimeout(() => { if (lastKind === "list") listChanged(); else location.hash = listHash(); }, 120);
 };
 addEventListener("keydown", e => { if (e.key === "/" && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName) && !e.ctrlKey && !e.metaKey) { e.preventDefault(); $("#q").focus(); } });
+addEventListener("click", e => $$("details.menu[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; }));
+addEventListener("keydown", e => { if (e.key === "Escape") $$("details.menu[open]").forEach(d => { d.open = false; $("summary", d).focus(); }); });
 addEventListener("hashchange", route);
 load();
 </script>

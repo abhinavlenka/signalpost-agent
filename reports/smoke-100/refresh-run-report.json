@@ -1,7 +1,7 @@
 {
   "run_id": "smoke100-refresh",
   "agent_version": "signalpost-agent/1.0.0",
-  "started_at": "2026-10-02T16:02:02.304359Z",
+  "started_at": "2026-10-02T20:03:20.653064Z",
   "input": "data/batch-rehearsal-100.txt",
   "invalid_inputs": [],
   "limits": {
@@ -22,29 +22,29 @@
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 25.7,
-      "requests": 513
+      "seconds": 26.2,
+      "requests": 512
     },
     "registry_websites": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 13.4,
-      "requests": 73
+      "seconds": 14.2,
+      "requests": 77
     },
     "website_discovery": {
       "companies": 96,
       "done": 96,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 249.0,
-      "requests": 419
+      "seconds": 249.1,
+      "requests": 426
     },
     "accounts": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
       "seconds": 15.8,
-      "requests": 387
+      "requests": 376
     }
   },
   "accounts_retry": {
@@ -56,14 +56,14 @@
   "nav": {
     "source": "nav_pam_stilling_feed",
     "pages": 97,
-    "ads_indexed": 30432,
-    "active_ads": 9475,
+    "ads_indexed": 30433,
+    "active_ads": 9482,
     "complete": true,
     "error": null,
-    "started_at": "2026-10-02T16:02:04.087426Z",
-    "completed_at": "2026-10-02T16:07:33.592788Z"
+    "started_at": "2026-10-02T20:03:22.637410Z",
+    "completed_at": "2026-10-02T20:08:50.269923Z"
   },
-  "completed_at": "2026-10-02T16:07:33.714669Z",
+  "completed_at": "2026-10-02T20:08:50.374033Z",
   "expected": 100,
   "emitted_envelopes": 100,
   "envelope_states": {
@@ -112,15 +112,15 @@
       "available": 100
     }
   },
-  "claims": 4723,
+  "claims": 4743,
   "changes": 0,
   "budget": {
     "max_requests": 1900,
-    "requests_used": 1018,
-    "elapsed_seconds": 331.6,
+    "requests_used": 1028,
+    "elapsed_seconds": 330.0,
     "by_purpose": {
-      "website": 184,
-      "robots": 152,
+      "website": 193,
+      "robots": 153,
       "brreg_financials": 100,
       "brreg_registry_live": 100,
       "brreg_roles": 100,
@@ -134,29 +134,47 @@
     "top_hosts": {
       "data.brreg.no": 506,
       "pam-stilling-feed.nav.no": 98,
+      "www.oslofjorden.org": 8,
+      "www.vetalis.fr": 8,
       "heidi428.wix.com": 8,
-      "www.oslofjorden.org": 7,
       "www.usbl.no": 7,
       "plorea.com": 7,
-      "www.vetalis.fr": 7,
-      "vildeinga.com": 6,
+      "vildeinga.com": 7,
       "gt-eiendom.no": 6,
+      "www.norwegianaerosolutions.no": 6,
+      "www.arendalgynekologi.no": 6,
       "www.carmel.no": 6,
+      "alufence.com": 6,
       "carmel.no": 6,
-      "www.datanova.no": 5,
-      "www.norwegianaerosolutions.no": 5,
-      "www.fjellro-eiendom.no": 5,
-      "www.arendalgynekologi.no": 5
+      "www.datanova.no": 5
     }
   },
+  "search": {
+    "enabled": false,
+    "queries": 0,
+    "max_queries": 0,
+    "cost_per_query_usd": 0.005
+  },
   "third_party_cost_usd": 0.0,
+  "cost_per_company_usd": 0.0,
+  "evidence": {
+    "claims": 4743,
+    "with_source_and_retrieval_time": 4743,
+    "with_content_hash": 4743,
+    "with_any_span": 4743,
+    "with_quoted_span": 4727,
+    "with_locator": 4743,
+    "with_stored_snapshot": 4743,
+    "accounts_claims": 1908,
+    "accounts_claims_with_reporting_period": 1908
+  },
   "validation": {
     "exact_count": true,
     "unique": true,
     "within_request_cap": true
   },
   "latency_ms": {
-    "p50": 8878,
-    "p95": 125334
+    "p50": 8886,
+    "p95": 125990
   }
 }
