@@ -1,6 +1,6 @@
 # 100-company smoke test
 
-Run on 2026-10-02 from a fresh clone at commit `887ce7c`, in an empty virtual environment, with only the declared install step:
+Run on 2026-10-02 from a fresh clone at commit `1680953`, in an empty virtual environment, with only the declared install step:
 
 ```bash
 uv sync --frozen
@@ -17,8 +17,8 @@ The batch is 100 organisation numbers drawn at random from the public universe. 
 | Envelope state | 100 `available` | 100 `available` |
 | Claims | 4,743 | 4,743 |
 | Changes reported | 0 (first observation) | 0 (nothing changed between runs) |
-| Outbound requests | 1,040 of 1,900 allowed | 1,028 of 1,900 allowed |
-| Wall-clock time | 5 min 31 s | 5 min 30 s |
+| Outbound requests | 1,037 of 1,900 allowed | 1,023 of 1,900 allowed |
+| Wall-clock time | 5 min 39 s | 5 min 30 s |
 | Third-party API cost | $0 | $0 |
 
 [`envelopes.jsonl`](envelopes.jsonl) is the output of the refresh run. The same 100 profiles are browsable in the explorer under [`docs/`](../../docs/), which the run command writes to `out/site/`.
