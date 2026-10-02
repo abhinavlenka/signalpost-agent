@@ -1,0 +1,162 @@
+{
+  "run_id": "smoke100-refresh",
+  "agent_version": "signalpost-agent/1.0.0",
+  "started_at": "2026-10-02T16:02:02.304359Z",
+  "input": "data/batch-rehearsal-100.txt",
+  "invalid_inputs": [],
+  "limits": {
+    "max_requests": 1900,
+    "deadline_minutes": 40.0,
+    "workers": 16,
+    "accounts_lanes": 6
+  },
+  "universe": {
+    "path": "data/signalpost-universe.jsonl.gz",
+    "available": true,
+    "content_sha256": "b82d6a3e7231d1759a958c282bc4366b80ec2fab8095053d8ed7fa9cd01bc838",
+    "matched": 100
+  },
+  "previous_envelopes": 100,
+  "phases": {
+    "core_registry": {
+      "companies": 100,
+      "done": 100,
+      "skipped_for_deadline_or_budget": 0,
+      "seconds": 25.7,
+      "requests": 513
+    },
+    "registry_websites": {
+      "companies": 100,
+      "done": 100,
+      "skipped_for_deadline_or_budget": 0,
+      "seconds": 13.4,
+      "requests": 73
+    },
+    "website_discovery": {
+      "companies": 96,
+      "done": 96,
+      "skipped_for_deadline_or_budget": 0,
+      "seconds": 249.0,
+      "requests": 419
+    },
+    "accounts": {
+      "companies": 100,
+      "done": 100,
+      "skipped_for_deadline_or_budget": 0,
+      "seconds": 15.8,
+      "requests": 387
+    }
+  },
+  "accounts_retry": {
+    "recovered": 0,
+    "still_failed": 0,
+    "rounds": 0,
+    "requests": 0
+  },
+  "nav": {
+    "source": "nav_pam_stilling_feed",
+    "pages": 97,
+    "ads_indexed": 30432,
+    "active_ads": 9475,
+    "complete": true,
+    "error": null,
+    "started_at": "2026-10-02T16:02:04.087426Z",
+    "completed_at": "2026-10-02T16:07:33.592788Z"
+  },
+  "completed_at": "2026-10-02T16:07:33.714669Z",
+  "expected": 100,
+  "emitted_envelopes": 100,
+  "envelope_states": {
+    "available": 100
+  },
+  "field_states": {
+    "legal_identity": {
+      "available": 100
+    },
+    "group_relationships": {
+      "not_applicable": 94,
+      "available": 6
+    },
+    "annual_accounts": {
+      "available": 100
+    },
+    "leadership": {
+      "available": 100
+    },
+    "official_website": {
+      "available": 11,
+      "not_available": 84,
+      "ambiguous": 5
+    },
+    "jobs": {
+      "not_available": 97,
+      "available": 3
+    },
+    "public_brand": {
+      "available": 40,
+      "not_available": 60
+    },
+    "filing_history": {
+      "available": 100
+    },
+    "registered_workplaces": {
+      "available": 83,
+      "not_available": 17
+    },
+    "company_profiles": {
+      "available": 6,
+      "not_available": 89,
+      "ambiguous": 5
+    },
+    "dated_activity": {
+      "available": 100
+    }
+  },
+  "claims": 4723,
+  "changes": 0,
+  "budget": {
+    "max_requests": 1900,
+    "requests_used": 1018,
+    "elapsed_seconds": 331.6,
+    "by_purpose": {
+      "website": 184,
+      "robots": 152,
+      "brreg_financials": 100,
+      "brreg_registry_live": 100,
+      "brreg_roles": 100,
+      "brreg_locations": 100,
+      "brreg_role_events": 100,
+      "nav_feed": 97,
+      "website_redirect": 78,
+      "brreg_group": 6,
+      "nav_token": 1
+    },
+    "top_hosts": {
+      "data.brreg.no": 506,
+      "pam-stilling-feed.nav.no": 98,
+      "heidi428.wix.com": 8,
+      "www.oslofjorden.org": 7,
+      "www.usbl.no": 7,
+      "plorea.com": 7,
+      "www.vetalis.fr": 7,
+      "vildeinga.com": 6,
+      "gt-eiendom.no": 6,
+      "www.carmel.no": 6,
+      "carmel.no": 6,
+      "www.datanova.no": 5,
+      "www.norwegianaerosolutions.no": 5,
+      "www.fjellro-eiendom.no": 5,
+      "www.arendalgynekologi.no": 5
+    }
+  },
+  "third_party_cost_usd": 0.0,
+  "validation": {
+    "exact_count": true,
+    "unique": true,
+    "within_request_cap": true
+  },
+  "latency_ms": {
+    "p50": 8878,
+    "p95": 125334
+  }
+}

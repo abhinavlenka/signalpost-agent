@@ -98,6 +98,10 @@ It is a static site (GitHub Pages ready, and it also opens from disk) with:
 - summary sentences with clickable claim citations
 - the change log and explicit unknowns
 
+## 100-company smoke test
+
+[`reports/smoke-100/`](reports/smoke-100/) holds the run report, the refresh run report and the envelopes from a clean-clone run on 100 random companies: 100 of 100 envelopes, 1,037 requests, 6.5 minutes, and 0 changes on the refresh run. The same profiles are browsable in the explorer under [`docs/`](docs/).
+
 ## Tests
 
 ```bash
