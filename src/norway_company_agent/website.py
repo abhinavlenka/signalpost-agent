@@ -235,6 +235,10 @@ def feed_items(xml_text: str, feed_url: str, limit: int = 12) -> list[dict[str, 
 
 def _fetch_feed(url: str, *, timeout: float) -> tuple[list[dict[str, Any]], int]:
     """One bounded request for the declared feed; any failure simply yields no items."""
+    try:
+        assert_public_url(url)  # a feed may sit on another host of the same domain: check it like any other target
+    except ValueError:
+        return [], 0
     if not _robots_allowed(url, timeout):
         return [], 1
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.5"})

@@ -87,7 +87,7 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
     def keep_previous_evidence(evidence_ids: list[str]) -> None:
         for evidence_id in evidence_ids:
             if evidence_id in prev_evidence and evidence_id not in curr_evidence_ids:
-                current["evidence"].append({**prev_evidence[evidence_id], "from_previous_run": previous.get("run", {}).get("run_id")})
+                current["evidence"].append({**prev_evidence[evidence_id], "id": evidence_id, "from_previous_run": previous.get("run", {}).get("run_id")})
                 curr_evidence_ids.add(evidence_id)
 
     for key, claim in curr_claims.items():

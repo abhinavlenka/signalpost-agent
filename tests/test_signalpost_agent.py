@@ -442,26 +442,32 @@ def test_register_listed_site_is_proven_by_registered_contact_details_plus_name(
     assert assessment["publishable"] is publishable
 
 
-def international_profile(legal_form="AS", markers=(), name="KITRON AS", url="https://www.kitron.com/"):
+def international_profile(legal_form="AS", home=(), contact=(), name="KITRON AS", url="https://www.kitron.com/"):
     p = profile()
     p["name"], p["legal_form"] = name, legal_form
     p["evidence"]["website"] = evidence("website", "available", "registry_linked_company_website", url, value={
-        "final_url": url, "requested_url": url, "content_sha256": "f" * 64, "identity_markers": {url: [], url + "contact": list(markers)},
+        "final_url": url, "requested_url": url, "content_sha256": "f" * 64, "identity_markers": {url: list(home), url + "contact": list(contact)},
         "identity_assessment": {"publishable": True, "score": 0.95, "reasons": ["name"], "method": "m"},
         "social_links": [{"platform": "facebook", "url": "https://facebook.com/kitrongroup"}, {"platform": "linkedin", "url": "https://linkedin.com/company/kitron"}]})
     return p
 
 
-@pytest.mark.parametrize("legal_form, markers, scope, profiles", [
-    ("AS", (), "possibly_group_or_international", []),                                   # could be a foreign group's site
-    ("AS", ("address",), "verified_by_registered_address_or_phone", ["facebook", "linkedin"]),  # registered address is on the site
-    ("AS", ("phone",), "verified_by_registered_address_or_phone", ["facebook", "linkedin"]),
-    ("ASA", (), "public_company_own_site", ["facebook", "linkedin"]),                    # a Norwegian public company is the parent
+@pytest.mark.parametrize("legal_form, home, contact, scope, profiles", [
+    ("AS", (), (), "possibly_group_or_international", []),                                       # could be a foreign group's site
+    ("AS", (), ("address", "phone"), "possibly_group_or_international", []),                     # a group's contact page lists every subsidiary's office
+    ("AS", ("address",), (), "verified_by_registered_address_or_phone", ["facebook", "linkedin"]),  # registered address on the homepage itself
+    ("AS", ("phone",), (), "verified_by_registered_address_or_phone", ["facebook", "linkedin"]),
+    ("ASA", (), (), "public_company_own_site", ["facebook", "linkedin"]),                        # a Norwegian public company is the parent
 ])
-def test_international_domain_is_only_a_group_site_without_norwegian_proof(legal_form, markers, scope, profiles):
-    envelope = build_envelope(international_profile(legal_form, markers), run=RUN)
+def test_international_domain_is_only_a_group_site_without_norwegian_proof(legal_form, home, contact, scope, profiles):
+    envelope = build_envelope(international_profile(legal_form, home, contact), run=RUN)
     assert [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"] == [scope]
     assert sorted(c["field"] for c in envelope["claims"] if c["family"] == "company_profiles") == profiles
+
+
+def test_norwegian_domain_with_registered_contact_details_anywhere_on_the_site_is_labelled_as_such():
+    envelope = build_envelope(international_profile("AS", (), ("address",), url="https://www.kitron.no/"), run=RUN)
+    assert [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"] == ["verified_by_registered_address_or_phone"]
 
 
 def test_envelope_follows_the_published_contract_names():
@@ -720,3 +726,24 @@ def test_summary_is_grouped_into_sections_and_says_why_things_are_unknown():
     assert all(s["section"] in {"identity", "business", "finances", "people", "presence"} and set(s["claim_ids"]) <= ids for s in summary["sentences"])
     assert "official website (the register lists no website and none was verified)" in summary["unknowns_text"]
     assert "job postings (no active NAV job ads with this organisation number in the checked window)" in summary["unknowns_text"]
+
+
+def test_evidence_carried_from_an_older_snapshot_still_has_the_contract_id():
+    older = apply_refresh(None, build_envelope(profile(), run=RUN))
+    for item in older["evidence"]:
+        item.pop("id")  # snapshots written before the contract name was added
+    broken = profile()
+    broken["evidence"]["financials"] = evidence("financials", "source_error", "official_annual_accounts", "https://x", note="HTTP 503")
+    refreshed = apply_refresh(older, build_envelope(broken, run=RUN2))
+    assert any(item.get("from_previous_run") for item in refreshed["evidence"])
+    assert all(item["id"] == item["evidence_id"] for item in refreshed["evidence"])
+
+
+def test_feed_on_a_private_host_is_never_fetched(monkeypatch):
+    from norway_company_agent import website
+
+    opened = []
+    monkeypatch.setattr(website, "_open", lambda request, **kwargs: opened.append(request.full_url))
+    monkeypatch.setattr(website, "_robots_allowed", lambda url, timeout: True)
+    assert website._fetch_feed("http://127.0.0.1/feed/", timeout=1.0) == ([], 0)
+    assert opened == []

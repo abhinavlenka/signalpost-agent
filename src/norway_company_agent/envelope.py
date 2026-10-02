@@ -478,7 +478,7 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
         if third_party:
             span += "; site scope: a page naming this company on a site under another name (chain, directory or platform); only the URL is published"
         builder.claim("official_website", "official_website", _without_default_port(value.get("final_url")), eid, identity="official_website",
-                      span=span, confidence=float(assessment.get("score") or 0.9) if scope not in {"possibly_group_or_international", "page_on_third_party_site"} else 0.8)
+                      locator="html (identity gate)", span=span, confidence=float(assessment.get("score") or 0.9) if scope not in {"possibly_group_or_international", "page_on_third_party_site"} else 0.8)
         builder.claim("public_brand", "website_scope", scope, eid, identity="website_scope", locator="identity_markers",
                       span=proof or f"{urllib.parse.urlparse(value.get('final_url') or '').hostname}: {'; '.join(assessment.get('reasons') or [])}")
         brand = None if third_party else value.get("site_name") or value.get("title")
@@ -564,10 +564,12 @@ def website_scope(value: dict[str, Any], legal_name: str | None = None, legal_fo
     host = parsed.hostname or ""
     if parsed.path.strip("/") and legal_name and not _own_domain(host, legal_name):
         return "page_on_third_party_site"
-    if markers & {"address", "phone"}:
-        return "verified_by_registered_address_or_phone"
     if host.endswith(".no"):
-        return "norwegian_domain"
+        return "verified_by_registered_address_or_phone" if markers & {"address", "phone"} else "norwegian_domain"
+    # On an international domain only the homepage counts: a group's contact page lists every
+    # subsidiary's office, so an address there does not make the site the subsidiary's own.
+    if {"address", "phone"} & set((value.get("identity_markers") or {}).get(value.get("final_url")) or []):
+        return "verified_by_registered_address_or_phone"
     if str(legal_form or "").upper() == "ASA":
         # A Norwegian public limited company is the listed parent: its corporate site is its own, whatever the domain.
         return "public_company_own_site"
@@ -591,7 +593,7 @@ def build_activity(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
             builder.claim("jobs", "open_job", value, eid, identity=["nav", job.get("uuid")], effective_date=str(job.get("published") or "")[:10] or None,
                           locator="$.ad_content", span=f"employer orgnr {job.get('employer_orgnr')}")
             builder.claim("dated_activity", "job_posted", {"date": str(job.get("published") or "")[:10], "title": job.get("title"), "url": job.get("public_url")},
-                          eid, identity=["job_posted", job.get("uuid")], effective_date=str(job.get("published") or "")[:10] or None,
+                          eid, identity=["job_posted", job.get("uuid")], effective_date=str(job.get("published") or "")[:10] or None, locator="$.ad_content.published",
                           span=f"{job.get('title')} (published {str(job.get('published') or '')[:10]}; employer orgnr {job.get('employer_orgnr')})")
         if not jobs:
             builder.state("jobs", "not_available", "no active NAV job ads with this organisation number in the checked window",
