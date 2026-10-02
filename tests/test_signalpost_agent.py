@@ -903,3 +903,61 @@ def test_role_change_dates_are_quoted_from_the_update_log():
     p["evidence"]["role_events"]["raw_text"] = '[{"time":"2022-10-03T12:43:28.976Z","type":"no.brreg.rolle.oppdatert"}]'
     claim = next(c for c in build_envelope(p, run=RUN)["claims"] if c["field"] == "registered_role_change")
     assert (claim["claim_span"], claim["span_kind"]) == ('"time":"2022-10-03T12:43:28.976Z"', "source_text")
+
+
+# ---------- precision fixes found while measuring recall
+
+@pytest.mark.parametrize("path, careers", [
+    ("/karriere/", True), ("/om-ness-lundin/karriere/", True), ("/careers", True), ("/jobb", True), ("/jobb-i-agaia/", True), ("/jobbe-hos-oss/", True),
+    ("/ledige-stillinger", True), ("/ledigestillinger/", True), ("/ledigstilling", True), ("/stilling-ledig/", True), ("/interne-stillinger", True), ("/ledigestillingar/", True),
+    # "bestilling" is an order and "utstilling" an exhibition: neither is a vacancy
+    ("/bestilling/", False), ("/skibestilling-bull-26-27-modeller", False), ("/bestilling-av-luftambulanse/", False),
+    ("/utstilling.467702.no.html", False), ("/produktkategori/hundeutstyr/utstilling/", False), ("/segment/utstilling-scene-kunst-og-kultur/", False),
+    ("/jobber/", False), ("/bli-medlem", False), ("/", False),
+])
+def test_careers_pages_are_matched_on_whole_words(path, careers):
+    from norway_company_agent.website import page_category
+
+    assert (page_category("https://aas.no" + path) == "careers") is careers
+
+
+def test_a_projects_link_is_not_followed_as_the_careers_page():
+    from bs4 import BeautifulSoup
+    from norway_company_agent.website import _priority_links
+
+    html = '<a href="/referanser">Våre jobber</a><a href="/om-oss/bli-en-av-oss">Ledige stillinger</a><a href="/produkter/bestilling">Bestilling</a>'
+    assert _priority_links("https://aas.no/", BeautifulSoup(html, "html.parser")) == ["https://aas.no/om-oss/bli-en-av-oss"]
+
+
+def test_careers_link_that_redirects_to_the_homepage_is_not_a_careers_page(monkeypatch):
+    from norway_company_agent import website
+
+    home = b'<html><head><title>Aas Elektronikk AS</title></head><body><a href="/ledige-stillinger">Ledige stillinger</a><p>' + b"Vi leverer elektronikk. " * 20 + b"</p></body></html>"
+
+    class Response:
+        headers = {"content-type": "text/html; charset=utf-8"}
+        status = 200
+
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self, limit=None): return home
+        def geturl(self): return "https://Aas.no/"  # the vacancy page is gone: the server answers with the homepage
+
+    monkeypatch.setattr(website, "assert_public_url", lambda url: None)
+    monkeypatch.setattr(website, "_robots_allowed", lambda url, timeout: True)
+    monkeypatch.setattr(website, "_open", lambda request, **kwargs: Response())
+    record, _ = website.fetch_website("https://aas.no/", max_pages=2)
+    assert record["status"] == "available" and record["value"]["careers_pages"] == []
+
+
+@pytest.mark.parametrize("title, text", [
+    ("www.vhelp.as is parked", "www.vhelp.as is parked. This domain has been registered and parked with a hosting provider. " * 2),
+    ("Hosted By One.com | Webhosting made simple", "Hosted By One.com. Webhosting made simple. Domain, hosting and web shop in one place. " * 3),
+    ("Apache2 Ubuntu Default Page: It works", "This is the default welcome page used to test the correct operation of the Apache2 server after installation. " * 5),
+    ("Welcome to nginx!", "If you see this page, the nginx web server is successfully installed and working. Further configuration is required. " * 3),
+])
+def test_hosting_placeholders_are_never_published_as_the_company_website(title, text):
+    from norway_company_agent.identity import assess_website_identity
+
+    assessment = assess_website_identity(gate_profile("VHELP AS", title=title, text=text, markers=[], registry_listed=True, host="http://www.vhelp.as/"))
+    assert assessment["publishable"] is False and "placeholder" in assessment["reasons"][0]

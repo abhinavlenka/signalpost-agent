@@ -83,7 +83,11 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
         "domain is for sale", "domain for sale", "hugedomains", "parked at", "miss hosting",
         "her flytter snart en ny gjest", "has been informing visitors",
         "find the best information and most relevant links on all topics related to",
+        # registrar and hosting placeholders, and untouched server default pages
+        "hosted by one.com", "webhosting made simple", "apache2 ubuntu default page", "apache2 debian default page", "default web site page",
     )
+    # generic phrases only count in the page title: a real site may use them in its text
+    placeholder_title = re.search(r"\bis parked\b|^hosted by\b|default page|^welcome to nginx|^index of /|ready for development", str(value.get("title") or "").strip(), re.I)
     normalized_raw = unicodedata.normalize("NFKD", candidate_text).encode("ascii", "ignore").decode().casefold()
     homepage_token_sets = [set(_tokens(part)) for part in homepage_identity_parts if part]
     exact_homepage_name = bool(core and any(set(core).issubset(tokens) for tokens in homepage_token_sets))
@@ -94,9 +98,9 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
     contact_on_site = any({"address", "phone"} & set(markers) for markers in (value.get("identity_markers") or {}).values())
     required = [token for token in core if token not in COUNTRY_WORDS]
     is_business_sports_club = bool(re.search(r"(?:^|\s)B\.?\s*I\.?\s*L\.?(?:\s|$)", str(profile.get("name") or ""), re.I))
-    if any(marker in normalized_raw for marker in parked_markers):
+    if placeholder_title or any(marker in normalized_raw for marker in parked_markers):
         score = 0.1
-        reasons.append("captured page is a parked, for-sale, or generic hosting placeholder")
+        reasons.append("captured page is a parked, for-sale or hosting placeholder, not a company website")
     elif is_business_sports_club and "bedriftsidrett" not in normalized_candidate_text and "b i l" not in normalized_candidate_text:
         score = 0.3
         reasons.append("business sports-club entity points to the operating company's site without club evidence")

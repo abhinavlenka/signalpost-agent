@@ -341,6 +341,29 @@ PAGE_CATEGORIES = (
 )
 
 
+# A careers page is published as a hiring signal, so it is matched on whole words: "bestilling" (an order)
+# and "utstilling" (an exhibition) contain "stilling", and "jobber" is what a craftsman calls finished projects.
+CAREERS_PATH = re.compile(
+    r"(?<![a-z0-9æøå])(?:karriere|careers?|jobs?|jobbe?(?:[-_](?:hos|i|med)[-_][a-z0-9æøå_-]+)?|ledige?[-_]?stilling(?:er|ar|ane)?"
+    r"|stilling(?:er|ar)?(?:[-_]ledige?)?|vacanc(?:y|ies)|join[-_]us|bli[-_]med|work[-_]with[-_]us)(?![a-z0-9æøå])")
+CAREERS_LABEL = re.compile(
+    r"(?<![a-z0-9æøå])(?:karriere|careers?|ledige? stilling(?:er|ar)?|stilling(?:er|ar)? ledige?|jobbe? hos oss|jobb i \w+|vacanc(?:y|ies)|join us|work with us|bli med på laget)(?![a-z0-9æøå])|^jobb$|^jobs$")
+
+
+def _matches_category(category: str, terms: tuple[str, ...], path: str, label: str | None = None) -> str | None:
+    """'path' when the URL path names the category, 'label' when only the link text does, else None."""
+    if category == "careers":
+        return "path" if CAREERS_PATH.search(path) else "label" if label is not None and CAREERS_LABEL.search(label) else None
+    if any(term in path for term in terms):
+        return "path"
+    return "label" if label is not None and any(term.replace("-", " ") in label for term in terms) else None
+
+
+def _same_page(first: str, second: str) -> bool:
+    a, b = urllib.parse.urlparse(first), urllib.parse.urlparse(second)
+    return (a.netloc.lower().removeprefix("www."), a.path.rstrip("/")) == (b.netloc.lower().removeprefix("www."), b.path.rstrip("/"))
+
+
 def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 5) -> list[str]:
     """Pick at most one link per page category, in category priority order."""
     base = urllib.parse.urlparse(base_url)
@@ -357,14 +380,15 @@ def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 5) -> list[
         if re.search(r"\.(pdf|jpe?g|png|gif|zip|docx?|xlsx?)$", parsed.path, re.I):
             continue
         clean = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path or "/", "", "", ""))
-        if clean.rstrip("/") == base_url.rstrip("/"):
+        if _same_page(clean, base_url):
             continue
         path = parsed.path.casefold()
         label = anchor.get_text(" ", strip=True).casefold()
         for category, terms in PAGE_CATEGORIES:
-            if any(term in path for term in terms):
+            matched = _matches_category(category, terms, path, label)
+            if matched == "path":
                 score = 0 + path.count("/")
-            elif any(term.replace("-", " ") in label for term in terms):
+            elif matched == "label":
                 score = 5 + path.count("/")
             else:
                 continue
@@ -377,7 +401,9 @@ def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 5) -> list[
 
 def page_category(url: str) -> str | None:
     path = urllib.parse.urlparse(url).path.casefold()
-    return next((category for category, terms in PAGE_CATEGORIES if any(term in path for term in terms)), None)
+    if CAREERS_PATH.search(path):
+        return "careers"
+    return next((category for category, terms in PAGE_CATEGORIES if category != "careers" and _matches_category(category, terms, path)), None)
 
 
 STATIC_PAGE_SLUG = re.compile(
@@ -524,7 +550,7 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
         page = {
             "identity_markers": identity_markers(page_html, identity),
             "identity_snippets": marker_snippets(page_html, identity),
-            "category": page_category(url),
+            "category": page_category(final_url),  # where the server actually took us, not what the link promised
             "dated_items": dated_items(page_html, final_url, page_soup),
             "url": final_url,
             "title": page_soup.title.get_text(" ", strip=True)[:500] if page_soup.title else "",
@@ -660,7 +686,7 @@ def fetch_website(
         for item in feed_news + home_news + [item for page in pages[1:] for item in page.get("dated_items") or []]:
             news.setdefault(item["title"].casefold() + item["date"], item)
         value["news_items"] = sorted(news.values(), key=lambda item: item["date"], reverse=True)[:12]
-        value["careers_pages"] = [page["url"] for page in pages[1:] if page.get("category") == "careers"]
+        value["careers_pages"] = [page["url"] for page in pages[1:] if page.get("category") == "careers" and not _same_page(page["url"], final_url)]
         value["social_links"] = list({(item["platform"], item["url"]): item for item in social}.values())
         value["crawl_errors"] = crawl_errors
         return evidence("website", "available", "registry_linked_company_website", final_url, value=value, note="Company-controlled claim layer; not an official registry fact", content_sha256=value["content_sha256"]), {"requests": requests, "bytes": bytes_received, "latencies_ms": page_latencies}
