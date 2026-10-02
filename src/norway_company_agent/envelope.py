@@ -641,7 +641,7 @@ def build_activity(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
                 stamp = re.search(rf'"time"\s*:\s*"{re.escape(date)}[^"]*"', events.get("raw_text") or "")
                 builder.claim("dated_activity", "registered_role_change", {"date": date, "title": "Registered roles updated in Brønnøysund"}, eid,
                               identity=["registered_role_change", date], effective_date=date, locator="$[*].time",
-                              span=_clip(stamp.group(0)) if stamp else f'"time": "{date}"')
+                              span=Quote(_clip(stamp.group(0)), exact=True) if stamp else f'"time": "{date}"')
     live = ev.get("registry_live") or {}
     live_value = live.get("value") or {}
     latest = live_value.get("latest_submitted_accounts")

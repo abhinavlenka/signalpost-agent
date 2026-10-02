@@ -23,6 +23,13 @@ def _tokens(value: Any) -> list[str]:
     return [token for token in re.findall(r"[a-z0-9]+", text) if token not in LEGAL_AND_GENERIC and len(token) > 1]
 
 
+def _compact_name(value: Any) -> str:
+    """The legal name as a domain would spell it: one-letter words kept ("A PLACE TO STAY"), legal-form and country words dropped."""
+    text = str(value or "").translate(str.maketrans({"ø": "o", "Ø": "O", "å": "a", "Å": "A", "æ": "ae", "Æ": "AE"}))
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().casefold()
+    return "".join(token for token in re.findall(r"[a-z0-9]+", text) if token not in LEGAL_AND_GENERIC and token not in COUNTRY_WORDS)
+
+
 def _structured_names(value: Any) -> list[str]:
     names: list[str] = []
     if isinstance(value, dict):
@@ -110,7 +117,7 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
         score = 0.93
         reasons.append("the official register lists this domain and its name equals the full normalized legal name")
     elif value.get("registry_listed") and contact_on_site and (
-            (len("".join(required)) >= 4 and "".join(required) == _domain_label(hostname)) or (len(core) == 1 and exact_homepage_name)):
+            (len("".join(required)) >= 4 and _domain_label(hostname) in {"".join(required), _compact_name(profile.get("name"))}) or (len(core) == 1 and exact_homepage_name)):
         score = 0.96
         reasons.append("the company declared this site to the register, its registered phone or address is on the site, and its name is the site's own name")
     elif ratio >= 0.75 and len(overlap) >= 2:

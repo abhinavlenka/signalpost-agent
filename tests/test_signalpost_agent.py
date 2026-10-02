@@ -431,6 +431,8 @@ def gate_profile(name, *, title, text, markers, registry_listed=True, host="http
     ("WORK SYSTEM EIENDOM AS", "Hjemmeside", "Work System leverer innredning til varebiler og servicebiler over hele landet. " * 3, ["phone", "address"], True, False),
     # an owner's site listed by a property company: none of its name is there
     ("DRAMMENSVEIEN 133 AS", "Klaveness Marine", "Klaveness Marine is a family-owned investment company. " * 3, ["phone", "address"], True, False),
+    # a name that starts with a one-letter word: the domain still spells the whole name
+    ("A PLACE TO STAY STAVANGER AS", "Home", "Leiligheter i Stavanger sentrum. " * 5, ["address"], True, True),
     # a sister company whose own words all appear somewhere in the homepage text, sharing the switchboard
     ("HANSEN EIENDOM AS", "Hansen Bygg", "Hansen Bygg bygger bolig og eiendom i hele regionen. " * 3, ["phone"], True, False),
     # after dropping the country word only a generic trade word is left
@@ -442,7 +444,7 @@ def test_register_listed_site_is_proven_by_registered_contact_details_plus_name(
     from norway_company_agent.identity import assess_website_identity
 
     host = {"DIPS AS": "https://www.dips.com/", "DRAMMENSVEIEN 133 AS": "https://www.klavenessmarine.com/", "HANSEN EIENDOM AS": "https://www.hansen-bygg.no/",
-            "NORDIC BYGG AS": "https://www.hansen-bygg.no/"}.get(name, "https://www.worksystem.no/")
+            "NORDIC BYGG AS": "https://www.hansen-bygg.no/", "A PLACE TO STAY STAVANGER AS": "https://aplacetostaystavanger.com/"}.get(name, "https://www.worksystem.no/")
     assessment = assess_website_identity(gate_profile(name, title=title, text=text, markers=markers, registry_listed=registry_listed, host=host))
     assert assessment["publishable"] is publishable
 
@@ -892,3 +894,12 @@ def test_a_query_that_cannot_be_built_does_not_spend_quota(monkeypatch):
     nameless["name"] = ""
     result = pipeline.discover_by_search(nameless, search=lambda query, key: SEARCH_RESULTS)
     assert "error" in result and pipeline._search_quota.used == 0 and not nameless.get("search_queries")
+
+
+def test_role_change_dates_are_quoted_from_the_update_log():
+    p = profile()
+    p["evidence"]["role_events"] = evidence("role_events", "available", "official_role_update_log", "https://data.brreg.no/enhetsregisteret/api/oppdateringer/roller?organisasjonsnummer=888567232",
+                                            value={"role_change_dates": ["2022-10-03"]}, content_sha256="7" * 64)
+    p["evidence"]["role_events"]["raw_text"] = '[{"time":"2022-10-03T12:43:28.976Z","type":"no.brreg.rolle.oppdatert"}]'
+    claim = next(c for c in build_envelope(p, run=RUN)["claims"] if c["field"] == "registered_role_change")
+    assert (claim["claim_span"], claim["span_kind"]) == ('"time":"2022-10-03T12:43:28.976Z"', "source_text")
