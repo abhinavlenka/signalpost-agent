@@ -431,13 +431,18 @@ def gate_profile(name, *, title, text, markers, registry_listed=True, host="http
     ("WORK SYSTEM EIENDOM AS", "Hjemmeside", "Work System leverer innredning til varebiler og servicebiler over hele landet. " * 3, ["phone", "address"], True, False),
     # an owner's site listed by a property company: none of its name is there
     ("DRAMMENSVEIEN 133 AS", "Klaveness Marine", "Klaveness Marine is a family-owned investment company. " * 3, ["phone", "address"], True, False),
+    # a sister company whose own words all appear somewhere in the homepage text, sharing the switchboard
+    ("HANSEN EIENDOM AS", "Hansen Bygg", "Hansen Bygg bygger bolig og eiendom i hele regionen. " * 3, ["phone"], True, False),
+    # after dropping the country word only a generic trade word is left
+    ("NORDIC BYGG AS", "Hansen Bygg", "Hansen Bygg bygger bolig og eiendom i hele regionen. " * 3, ["phone"], True, False),
     # not declared to the register: phone and partial name are not enough here (discovery has its own stricter rule)
     ("WORK SYSTEM NORWAY AS", "Hjemmeside", "Work System leverer innredning til varebiler og servicebiler over hele landet. " * 3, ["phone"], False, False),
 ])
 def test_register_listed_site_is_proven_by_registered_contact_details_plus_name(name, title, text, markers, registry_listed, publishable):
     from norway_company_agent.identity import assess_website_identity
 
-    host = "https://www.dips.com/" if name == "DIPS AS" else "https://www.klavenessmarine.com/" if name.startswith("DRAMMENSVEIEN") else "https://www.worksystem.no/"
+    host = {"DIPS AS": "https://www.dips.com/", "DRAMMENSVEIEN 133 AS": "https://www.klavenessmarine.com/", "HANSEN EIENDOM AS": "https://www.hansen-bygg.no/",
+            "NORDIC BYGG AS": "https://www.hansen-bygg.no/"}.get(name, "https://www.worksystem.no/")
     assessment = assess_website_identity(gate_profile(name, title=title, text=text, markers=markers, registry_listed=registry_listed, host=host))
     assert assessment["publishable"] is publishable
 
@@ -465,9 +470,11 @@ def test_international_domain_is_only_a_group_site_without_norwegian_proof(legal
     assert sorted(c["field"] for c in envelope["claims"] if c["family"] == "company_profiles") == profiles
 
 
-def test_norwegian_domain_with_registered_contact_details_anywhere_on_the_site_is_labelled_as_such():
-    envelope = build_envelope(international_profile("AS", (), ("address",), url="https://www.kitron.no/"), run=RUN)
-    assert [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"] == ["verified_by_registered_address_or_phone"]
+def test_norwegian_domain_scope_does_not_depend_on_which_pages_were_reachable():
+    with_contact = build_envelope(international_profile("AS", (), ("address",), url="https://www.kitron.no/"), run=RUN)
+    without = build_envelope(international_profile("AS", (), (), url="https://www.kitron.no/"), run=RUN)
+    scope = lambda envelope: [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"]  # noqa: E731
+    assert scope(with_contact) == scope(without) == ["norwegian_domain"]
 
 
 def test_envelope_follows_the_published_contract_names():
@@ -619,7 +626,9 @@ def site_record(url, *, title, markers, text="Vi leverer elektronikk til industr
 
 SEARCH_RESULTS = [
     {"url": "https://www.proff.no/selskap/aas-elektronikk-as/888567232", "title": "Aas Elektronikk AS - Proff", "snippet": "Org.nr 888 567 232", "rank": 1, "provider": "brave_search_api", "query": "q"},
-    {"url": "https://www.elektro-sor.no/", "title": "Elektro Sør | Aas Elektronikk AS", "snippet": "Aas Elektronikk AS, Natvigveien 17, Nedenes", "rank": 2, "provider": "brave_search_api", "query": "q"},
+    # a directory that is not on the block list and prints the org number: must never become the "official website"
+    {"url": "https://www.regnskapstall.no/informasjon-om-aas-elektronikk-as-888567232S0", "title": "Aas Elektronikk AS - Regnskapstall", "snippet": "Org.nr 888567232", "rank": 2, "provider": "brave_search_api", "query": "q"},
+    {"url": "https://www.aas-elektronikk-agder.no/kontakt", "title": "Kontakt | Aas Elektronikk AS", "snippet": "Aas Elektronikk AS, Natvigveien 17, Nedenes", "rank": 3, "provider": "brave_search_api", "query": "q"},
 ]
 
 
@@ -648,17 +657,17 @@ def test_search_candidate_is_published_only_after_the_fetched_site_proves_the_en
 
     def fake_fetch(url, **kwargs):
         fetched.append(url)
-        return site_record("https://www.elektro-sor.no/", title="Elektro Sør", markers=["organisation_number"])
+        return site_record(url, title="Elektro Sør", markers=["organisation_number"])
 
     monkeypatch.setattr(pipeline, "fetch_website", fake_fetch)
     monkeypatch.setattr(pipeline, "resolve_many", lambda hosts, timeout=4.0: set(hosts))
     p = search_profile()
     result = pipeline.discover_by_search(p, search=lambda query, key: SEARCH_RESULTS)
     assert result["query"] == '"AAS ELEKTRONIKK AS" 888567232'
-    assert all("proff.no" not in url for url in fetched)  # directories are never crawled as candidates
+    assert set(fetched) == {"https://www.aas-elektronikk-agder.no/"}  # only the domain named after the company, at its root; directories are never crawled
     envelope = build_envelope(p, run=RUN)
-    assert [c["value"] for c in envelope["claims"] if c["field"] == "official_website"] == ["https://www.elektro-sor.no/"]
-    assert {e["source_class"] for e in envelope["evidence"] if "elektro-sor" in e["source_url"]} == {"search_discovered_website"}
+    assert [c["value"] for c in envelope["claims"] if c["field"] == "official_website"] == ["https://www.aas-elektronikk-agder.no/"]
+    assert {e["source_class"] for e in envelope["evidence"] if "agder" in e["source_url"]} == {"search_discovered_website"}
     assert p["search_queries"] == 1
 
 
@@ -667,7 +676,7 @@ def test_search_candidate_without_registry_proof_on_the_site_is_dropped(monkeypa
 
     monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
     pipeline.reset_search_quota(10)
-    monkeypatch.setattr(pipeline, "fetch_website", lambda url, **kwargs: site_record("https://www.elektro-sor.no/", title="Aas Elektronikk AS", markers=[]))
+    monkeypatch.setattr(pipeline, "fetch_website", lambda url, **kwargs: site_record(url, title="Aas Elektronikk AS", markers=[]))
     monkeypatch.setattr(pipeline, "resolve_many", lambda hosts, timeout=4.0: set(hosts))
     p = search_profile()
     pipeline.discover_by_search(p, search=lambda query, key: SEARCH_RESULTS)
@@ -679,7 +688,7 @@ def test_search_quota_caps_paid_queries(monkeypatch):
 
     monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
     pipeline.reset_search_quota(1)
-    monkeypatch.setattr(pipeline, "fetch_website", lambda url, **kwargs: site_record("https://www.elektro-sor.no/", title="x", markers=[]))
+    monkeypatch.setattr(pipeline, "fetch_website", lambda url, **kwargs: site_record(url, title="x", markers=[]))
     monkeypatch.setattr(pipeline, "resolve_many", lambda hosts, timeout=4.0: set(hosts))
     calls = []
     search = lambda query, key: calls.append(query) or SEARCH_RESULTS  # noqa: E731
@@ -766,3 +775,120 @@ def test_entity_type_words_are_not_part_of_the_distinguishing_name(name, host, t
 
     assessment = assess_website_identity(gate_profile(name, title=title, text="Informasjon til beboere og eiere. " * 5, markers=[], host=host))
     assert assessment["publishable"] is publishable
+
+
+# ---------- fixes from review
+
+def test_feed_in_a_legacy_encoding_keeps_norwegian_letters():
+    from norway_company_agent.website import feed_items
+
+    raw = ('<?xml version="1.0" encoding="ISO-8859-1"?><rss version="2.0"><channel><item><title>Nytt kontor i Bodø åpnet</title>'
+           '<link>https://aas.no/nyheter/bodo/</link><pubDate>Tue, 15 Sep 2026 08:30:00 +0000</pubDate></item></channel></rss>').encode("iso-8859-1")
+    assert [item["title"] for item in feed_items(raw, "https://aas.no/feed/")] == ["Nytt kontor i Bodø åpnet"]
+
+
+def test_address_snippet_is_only_recorded_when_the_address_marker_holds():
+    from norway_company_agent.website import identity_markers, marker_snippets
+
+    identity = {"organisation_number": "888567232", "phones": [], "postal_code": "0155", "street": "Storgata"}
+    html = "<p>Besøk oss i Storgata 12, 5003 Bergen</p>"  # same street name, another town
+    assert identity_markers(html, identity) == [] and marker_snippets(html, identity) == {}
+    right = "<p>Besøk oss i Storgata 12, 0155 Oslo</p>"
+    assert identity_markers(right, identity) == ["address"] and "Storgata 12, 0155 Oslo" in marker_snippets(right, identity)["address"]
+
+
+def test_same_as_is_read_from_the_organisation_only_not_from_authors():
+    from norway_company_agent.website import page_social_links
+
+    html = """<html><head><script type="application/ld+json">{"@context":"https://schema.org","@graph":[
+      {"@type":"Organization","name":"Acme AS","sameAs":["https://www.linkedin.com/company/acme-as"]},
+      {"@type":"Article","headline":"x","author":{"@type":"Person","name":"Jo","sameAs":["https://x.com/acmejo"]}}]}</script></head><body></body></html>"""
+    assert [item["url"] for item in page_social_links(html, "https://acme.no/")] == ["https://linkedin.com/company/acme-as"]
+
+
+def test_role_quote_names_the_right_person():
+    from norway_company_agent.envelope import _role_quote
+
+    raw = '{"rollegrupper":[{"roller":[{"person":{"navn":{"fornavn":"Ola","etternavn":"Berg"}}},{"person":{"navn":{"fornavn":"Kari","etternavn":"Lindberg"}}},{"person":{"navn":{"fornavn":"X","etternavn":""}}}]}]}'
+    assert _role_quote(raw, {"name": "Kari Lindberg", "role": "Styremedlem", "role_code": "MEDL"}).startswith('"etternavn":"Lindberg"')
+    assert _role_quote(raw, {"name": "Ola Berg", "role": "Styrets leder", "role_code": "LEDE"}).startswith('"etternavn":"Berg"')
+
+
+def test_span_kind_separates_text_quoted_from_the_source_from_rendered_values():
+    p = profile()
+    p["evidence"]["registry_live"]["raw_text"] = RAW_ENTITY
+    kinds = {(c["family"], c["field"]): c["span_kind"] for c in build_envelope(p, run=RUN)["claims"]}
+    assert kinds[("legal_identity", "legal_name")] == "source_text"           # matched in the stored response
+    assert kinds[("annual_accounts", "revenue")] == "rendered_value"          # no raw text for the accounts record here
+    from norway_company_agent.pipeline import evidence_metrics
+
+    totals = evidence_metrics([build_envelope(p, run=RUN)])
+    assert 0 < totals["with_quoted_span"] < totals["claims"] == totals["with_any_span"]
+
+
+def test_compact_json_does_not_hide_a_nested_key_of_the_same_name():
+    from norway_company_agent.envelope import quote_json
+
+    raw = '[{"resultatregnskapResultat":{"driftsresultat":{"driftsinntekter":{"sumDriftsinntekter":25468413.00},"driftsresultat":4150764.00},"aarsresultat":8108431.00}}]'
+    assert quote_json(raw, "driftsresultat", 4150764.0) == '"driftsresultat":4150764.00'
+    assert quote_json(raw, "driftsresultat", 4150764.0).exact is True and quote_json(None, "driftsresultat", 4150764.0).exact is False
+
+
+def news_profile():
+    p = website_profile("https://aas.no/")
+    value = p["evidence"]["website"]["value"]
+    value["feed"] = {"url": "https://aas.no/feed/", "content_sha256": "9" * 64, "retrieved_at": "2026-09-27T00:00:20Z"}
+    value["news_items"] = [
+        {"date": "2026-09-15", "title": "Ny avtale signert", "url": "https://aas.no/nyheter/ny-avtale/", "locator": "rss:item/pubDate", "found_in": {"url": "https://aas.no/feed/", "content_sha256": "9" * 64}},
+        {"date": "2026-08-01", "title": "Sommerstengt", "url": "https://aas.no/nyheter/sommer/", "locator": "time[datetime]", "found_in": {"url": "https://aas.no/nyheter/", "content_sha256": "8" * 64}},
+    ]
+    return p
+
+
+def test_news_cites_the_feed_or_page_it_was_read_from():
+    envelope = build_envelope(news_profile(), run=RUN)
+    records = {item["id"]: item for item in envelope["evidence"]}
+    cited = {c["value"]["title"]: records[c["evidence_ids"][0]] for c in envelope["claims"] if c["field"] == "website_news"}
+    assert (cited["Ny avtale signert"]["source_url"], cited["Ny avtale signert"]["content_sha256"]) == ("https://aas.no/feed/", "9" * 64)
+    assert (cited["Sommerstengt"]["source_url"], cited["Sommerstengt"]["content_sha256"]) == ("https://aas.no/nyheter/", "8" * 64)
+
+
+def test_broken_feed_link_never_costs_the_website(monkeypatch):
+    from norway_company_agent import website
+
+    html = b'<html><head><title>Aas Elektronikk AS</title><link rel="alternate" type="application/rss+xml" href="http://[bad/feed"></head><body><p>' + b"Vi leverer elektronikk. " * 20 + b"</p></body></html>"
+
+    class Response:
+        headers = {"content-type": "text/html; charset=utf-8"}
+        status = 200
+
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self, limit=None): return html
+        def geturl(self): return "https://aas.no/"
+
+    monkeypatch.setattr(website, "assert_public_url", lambda url: None)
+    monkeypatch.setattr(website, "_robots_allowed", lambda url, timeout: True)
+    monkeypatch.setattr(website, "_open", lambda request, **kwargs: Response())
+    record, _ = website.fetch_website("https://aas.no/", max_pages=1)
+    assert record["status"] == "available" and record["value"]["news_items"] == []
+
+
+def test_malformed_limits_in_the_environment_fall_back_to_defaults(monkeypatch):
+    from norway_company_agent.pipeline import env_number
+
+    monkeypatch.setenv("SIGNALPOST_SEARCH_MAX_QUERIES", "lots")
+    monkeypatch.setenv("SIGNALPOST_SEARCH_COST_PER_QUERY", "0.01")
+    assert env_number("SIGNALPOST_SEARCH_MAX_QUERIES", 100) == 100
+    assert env_number("SIGNALPOST_SEARCH_COST_PER_QUERY", 0.005) == 0.01
+
+
+def test_a_query_that_cannot_be_built_does_not_spend_quota(monkeypatch):
+    from norway_company_agent import pipeline
+
+    monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
+    pipeline.reset_search_quota(5)
+    nameless = search_profile()
+    nameless["name"] = ""
+    result = pipeline.discover_by_search(nameless, search=lambda query, key: SEARCH_RESULTS)
+    assert "error" in result and pipeline._search_quota.used == 0 and not nameless.get("search_queries")

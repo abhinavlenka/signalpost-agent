@@ -68,7 +68,7 @@ Optional search discovery is off unless a key is supplied:
 | 1 | Regnskapsregisteret API | latest filed annual accounts | open API, NLOD 2.0 |
 | 1 | NAV arbeidsplassen `pam-stilling-feed` | job postings | public token, [API terms](https://arbeidsplassen.nav.no/vilkar-api) |
 | 2 | Company website: listed in the official register, declared by the employer in a NAV ad, the company's registry e-mail domain, or a name-derived `.no` domain | verified website, company-owned social profiles, careers page, dated news (page markup and the site's own RSS/Atom feed), self-description | robots.txt respected; small bounded crawl |
-| 5 | Brave Search API (optional, key required) | website candidates only; nothing from a search result is published | paid API; candidates must pass the same gate as any undeclared site |
+| 5 | Brave Search API (optional, key required) | website candidates only; nothing from a search result is published | paid API; only a domain named after the company is fetched, and it must pass the same gate as any undeclared site |
 
 **Not used:** LinkedIn, Meta, Glassdoor, Indeed, Google, scraped search-engine pages, or any unofficial scrapers.
 
@@ -82,12 +82,12 @@ The organisation number is the anchor throughout:
 
 1. **Registry facts** come from the live registry record for that number.
 2. **Websites.** A registry-listed site is published only when it passes an exact-entity gate: the org number appears anywhere in the site's raw HTML, or the full legal name appears in the homepage identity markup, or the listed domain spells the full legal name.
-   - **Contact-detail proof.** A site the company declared to the register also passes when its registered phone or address is on the site and every distinguishing word of its legal name is on the homepage. Country words such as "Norway" are ignored; a sister company that shares a switchboard still fails.
+   - **Contact-detail proof.** A site the company declared to the register also passes when its registered phone or address is on the site and the site is named after the company: the domain spells the legal name (country words such as "Norway" aside), or a one-word name is in the homepage title. A sister company that shares a switchboard still fails.
    - **Discovered sites.** A site found from a name-derived domain faces a stricter rule: the org number on the site, or the exact legal name **plus** the registered street address or phone. A site on the company's registry e-mail domain is company-declared to the register, so it faces the same gate as a registry-listed site.
    - **Failed gate.** Registry-listed sites that fail the gate are marked `ambiguous` and labelled as a registry-declared site under *public brand*. Nothing is extracted from them.
    - **Pages on someone else's site.** A deep page on a domain not named after the company (a chain's member page, a directory, a platform) is labelled `page_on_third_party_site`. Only the URL is published: no description, profiles, careers page or news, because those belong to the site owner.
-   - **Possible group sites.** A non-`.no` site proven only by name is labelled `possibly_group_or_international`. Only Norway-specific social handles are published from it, and no news. A site with the registered address or phone on it, or the site of a Norwegian public company (ASA), is treated as the company's own.
-3. **Social profiles** are published only when a verified site links them, or declares them in its Organization markup, and the handle matches the legal name.
+   - **Possible group sites.** A non-`.no` site proven only by name is labelled `possibly_group_or_international`. Only Norway-specific social handles are published from it, and no news. A site whose homepage carries the registered address or phone, or the site of a Norwegian public company (ASA), is treated as the company's own. An address on a contact page does not count, because a group's contact page lists every subsidiary's office.
+3. **Social profiles** are published only when a verified site links them, or declares them in the `sameAs` of its Organization markup, and the handle matches the legal name. An author's or product's `sameAs` is ignored.
 4. **Jobs** are published only when the NAV ad's `employer.orgnr` is the company or one of its own registered subunits. Name similarity only nominates candidates.
 
 ## Output contract

@@ -33,4 +33,4 @@ A change that finds more data by weakening the identity gate is dropped.
 
 ## Evidence completeness in the run report
 
-`run-report.json` has an `evidence` block counting, over all published claims: those with a source and retrieval time, with a content hash, with a quoted span, with a locator, with a stored raw snapshot, and accounts claims with a reporting period.
+`run-report.json` has an `evidence` block counting, over all published claims: those with a source and retrieval time, with a content hash, with any span, with a span found verbatim in the fetched source (`with_quoted_span`), with a locator, with a stored raw snapshot, and accounts claims with a reporting period.

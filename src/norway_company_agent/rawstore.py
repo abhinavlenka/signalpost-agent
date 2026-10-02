@@ -12,7 +12,6 @@ import threading
 from pathlib import Path
 
 _root: Path | None = None
-_lock = threading.Lock()
 
 
 def set_raw_store(state_dir: str | Path | None) -> None:

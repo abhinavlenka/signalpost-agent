@@ -81,11 +81,11 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
     homepage_token_sets = [set(_tokens(part)) for part in homepage_identity_parts if part]
     exact_homepage_name = bool(core and any(set(core).issubset(tokens) for tokens in homepage_token_sets))
     substantive_homepage = len(str(value.get("main_text_excerpt") or "").strip()) >= 100
-    # Shared switchboards and addresses are common between sister companies, so contact details only
-    # count together with every distinguishing word of the legal name (country words aside).
+    # Shared switchboards and addresses are common between sister companies, and their names share words
+    # with each other, so contact details only count when the site is itself named after the company:
+    # the domain spells the legal name (country words aside), or a one-word name is in the homepage identity.
     contact_on_site = any({"address", "phone"} & set(markers) for markers in (value.get("identity_markers") or {}).values())
     required = [token for token in core if token not in COUNTRY_WORDS]
-    homepage_tokens = set(_tokens(homepage_candidate_text))
     is_business_sports_club = bool(re.search(r"(?:^|\s)B\.?\s*I\.?\s*L\.?(?:\s|$)", str(profile.get("name") or ""), re.I))
     if any(marker in normalized_raw for marker in parked_markers):
         score = 0.1
@@ -109,9 +109,10 @@ def assess_website_identity(profile: dict[str, Any]) -> dict[str, Any]:
     elif core and value.get("registry_listed") and _domain_label(hostname) == "".join(core) and len("".join(core)) >= 5:
         score = 0.93
         reasons.append("the official register lists this domain and its name equals the full normalized legal name")
-    elif value.get("registry_listed") and contact_on_site and required and (set(required) <= homepage_tokens or "".join(required) == _domain_label(hostname)):
+    elif value.get("registry_listed") and contact_on_site and (
+            (len("".join(required)) >= 4 and "".join(required) == _domain_label(hostname)) or (len(core) == 1 and exact_homepage_name)):
         score = 0.96
-        reasons.append("the company declared this site to the register, its registered phone or address is on the site, and its name is on the homepage")
+        reasons.append("the company declared this site to the register, its registered phone or address is on the site, and its name is the site's own name")
     elif ratio >= 0.75 and len(overlap) >= 2:
         score = 0.85
         reasons.append("most legal-name tokens appear, but exact identity is incomplete")
@@ -163,6 +164,11 @@ def assess_social_identity(profile: dict[str, Any], link: dict[str, str]) -> dic
     }
 
 
+def publishable_social_links(value: dict[str, Any]) -> list[dict[str, str]]:
+    """Profiles on a site whose handle passed the name check, with where on the page they were declared."""
+    return [{key: item[key] for key in ("platform", "url", "declared_in") if key in item} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
+
+
 def apply_website_identity_gate(profile: dict[str, Any], website: dict[str, Any]) -> dict[str, Any]:
     if website.get("status") != "available":
         return {"website": website, "assessment": None, "quarantined_social_links": 0}
@@ -174,11 +180,7 @@ def apply_website_identity_gate(profile: dict[str, Any], website: dict[str, Any]
     value["discovered_social_links"] = original
     social_assessments = [assess_social_identity(profile, link) for link in original]
     value["social_link_assessments"] = social_assessments
-    value["social_links"] = [
-        {key: item[key] for key in ("platform", "url", "declared_in") if key in item}
-        for item in social_assessments
-        if assessment["publishable"] and item["publishable"]
-    ]
+    value["social_links"] = publishable_social_links(value) if assessment["publishable"] else []
     website["value"] = value
     return {
         "website": website,

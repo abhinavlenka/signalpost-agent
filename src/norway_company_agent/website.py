@@ -154,9 +154,12 @@ def page_social_links(html: str, base_url: str, soup: BeautifulSoup | None = Non
     add(_social_links(base_url, soup), "a[href]")
     for node in soup.select('script[type="application/ld+json"]'):
         try:
-            add(structured_social_links(json.loads(node.string or node.get_text() or "null")), "ld+json:sameAs")
+            data = json.loads(node.string or node.get_text() or "null")
         except (ValueError, TypeError):
             continue
+        # only what the site says about the organisation itself: an article author's or a product's sameAs is someone else's profile
+        for organisation in _jsonld_organisations({"json-ld": data}):
+            add(structured_social_links({"sameAs": organisation.get("sameAs")}), "ld+json:sameAs")
     for selector in ('meta[property="article:publisher"]', 'meta[property="og:see_also"]'):
         for node in soup.select(selector):
             normalized = normalize_social_url(str(node.get("content") or "").strip())
@@ -194,14 +197,19 @@ def declared_feed_url(html: str, page_url: str, soup: BeautifulSoup | None = Non
     return None
 
 
-def feed_items(xml_text: str, feed_url: str, limit: int = 12) -> list[dict[str, Any]]:
-    """Dated posts from an RSS or Atom feed. Only items with an explicit date and a link on the feed's own domain."""
+def feed_items(xml: bytes | str, feed_url: str, limit: int = 12) -> list[dict[str, Any]]:
+    """Dated posts from an RSS or Atom feed. Only items with an explicit date and a link on the feed's own domain.
+
+    Pass the bytes as received: the parser then honours the encoding the feed declares.
+    """
     from email.utils import parsedate_to_datetime
 
     from lxml import etree
 
+    if isinstance(xml, str):  # already decoded: drop the declared encoding so it is not applied a second time
+        xml = re.sub(r'^(\s*<\?xml[^>]*?)\s+encoding=["\'][^"\']*["\']', r"\1", xml).encode("utf-8")
     try:
-        root = etree.fromstring(xml_text.encode("utf-8"), parser=etree.XMLParser(resolve_entities=False, no_network=True, recover=True, huge_tree=False))
+        root = etree.fromstring(xml, parser=etree.XMLParser(resolve_entities=False, no_network=True, recover=True, huge_tree=False))
     except (etree.XMLSyntaxError, ValueError):
         return []
     if root is None:
@@ -239,16 +247,18 @@ def _fetch_feed(url: str, *, timeout: float) -> tuple[list[dict[str, Any]], int]
         assert_public_url(url)  # a feed may sit on another host of the same domain: check it like any other target
     except ValueError:
         return [], 0
-    if not _robots_allowed(url, timeout):
-        return [], 1
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.5"})
     try:
+        if not _robots_allowed(url, timeout):
+            return [], 1
+        request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.5"})
         with _open(request, timeout=timeout) as response:
             raw = response.read(1_000_001)
             if len(raw) > 1_000_000 or _registered_domain(response.geturl()) != _registered_domain(url):
                 return [], 2
-        save_raw(__import__("hashlib").sha256(raw).hexdigest(), raw)
-        return feed_items(raw.decode("utf-8", errors="replace"), url), 2
+        digest = __import__("hashlib").sha256(raw).hexdigest()
+        save_raw(digest, raw)
+        found_in = {"url": url, "content_sha256": digest, "retrieved_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+        return [{**item, "found_in": found_in} for item in feed_items(raw, url)], 2
     except Exception:
         return [], 2
 
@@ -469,11 +479,14 @@ def marker_snippets(html: str, identity: dict[str, Any] | None) -> dict[str, str
     """The page text around each registry marker, so a reader can see the proof without opening the page."""
     if not identity:
         return {}
+    present = set(identity_markers(html, identity))  # a snippet is proof only for a marker that actually holds
+    if not present:
+        return {}
     text = " ".join(re.sub(r"&nbsp;|&#160;|\u00a0", " ", re.sub(r"<[^>]+>", " ", re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", html))).split())
     snippets: dict[str, str] = {}
 
     def around(match: re.Match[str] | None, marker: str) -> None:
-        if match and marker not in snippets:
+        if match and marker in present and marker not in snippets:
             snippets[marker] = text[max(0, match.start() - 60):match.end() + 40].strip()
 
     spaced = lambda digits: r"[\s.\-]?".join(re.escape(char) for char in digits)  # noqa: E731
@@ -518,6 +531,8 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
             "main_text_excerpt": page_text[:5000],
             "content_sha256": __import__("hashlib").sha256(raw).hexdigest(),
         }
+        for item in page["dated_items"]:
+            item["found_in"] = {"url": final_url, "content_sha256": page["content_sha256"]}
         return page, page_social_links(page_html, final_url, page_soup), 2, len(raw), elapsed, None
     except Exception as exc:
         return None, [], 2, 0, int((time.monotonic() - started) * 1000), f"{type(exc).__name__}: {str(exc)[:120]}"
@@ -632,13 +647,17 @@ def fetch_website(
                 crawl_errors.append({"url": page_url, "error": page_error})
         value["pages"] = pages
         feed_news: list[dict[str, Any]] = []
-        feed_url = declared_feed_url(html, final_url, soup) if max_pages else None
-        if feed_url:
-            feed_news, feed_requests = _fetch_feed(feed_url, timeout=timeout)
-            requests += feed_requests
-            value["feed_url"] = feed_url
+        try:  # the feed is a bonus: a malformed link or a flaky feed host must never cost the site itself
+            feed_url = declared_feed_url(html, final_url, soup) if max_pages else None
+            if feed_url:
+                feed_news, feed_requests = _fetch_feed(feed_url, timeout=timeout)
+                requests += feed_requests
+                value["feed_url"] = feed_url
+        except Exception as exc:
+            crawl_errors.append({"url": "feed", "error": f"{type(exc).__name__}: {str(exc)[:120]}"})
+        home_news = [{**item, "found_in": {"url": final_url, "content_sha256": value["content_sha256"]}} for item in dated_items(html, final_url, soup)]
         news: dict[str, dict[str, Any]] = {}
-        for item in feed_news + dated_items(html, final_url, soup) + [item for page in pages[1:] for item in page.get("dated_items") or []]:
+        for item in feed_news + home_news + [item for page in pages[1:] for item in page.get("dated_items") or []]:
             news.setdefault(item["title"].casefold() + item["date"], item)
         value["news_items"] = sorted(news.values(), key=lambda item: item["date"], reverse=True)[:12]
         value["careers_pages"] = [page["url"] for page in pages[1:] if page.get("category") == "careers"]

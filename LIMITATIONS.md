@@ -5,7 +5,7 @@
 - **Websites.** Only about 11% of the eligible universe lists a website in the official register.
   - Companies without one are covered by three free discovery paths: an employer homepage declared in an exact-orgnr NAV ad, the company's registry e-mail domain, and name-derived `.no` domains. The last two require the org number, or the exact name plus address or phone, on the site.
   - Without a search key, websites under unrelated brand names are missed and stay `not_available`.
-  - The optional Brave Search connector (`BRAVE_SEARCH_API_KEY`) generates candidates for those companies. It was tested against saved responses only, not live, because no key was available during development. A candidate is published only with the org number on the site, or the exact legal name plus the registered address or phone.
+  - The optional Brave Search connector (`BRAVE_SEARCH_API_KEY`) generates candidates for those companies. It was tested against saved responses only, not live, because no key was available during development. Only a domain named after the company is fetched, so sites under unrelated brand names are still missed. A candidate is published only with the org number on the site, or the exact legal name plus the registered address or phone.
 - **Jobs.** Only NAV's national job feed is used, covering ads modified in the last 45 days (about 10k active ads).
   - Jobs posted only on LinkedIn, Finn or company career portals are not captured, except as a `careers_page` claim on a verified site.
   - Candidate matching is by normalized employer name; publication is by exact `employer.orgnr`. An ad whose employer name differs from the legal and subunit names is missed.

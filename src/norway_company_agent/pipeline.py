@@ -17,11 +17,11 @@ from typing import Any, Callable
 
 from .budget import BudgetExhausted, RequestBudget, active_budget, set_active_budget, thread_requests
 from .claim_refresh import apply_refresh
-from .envelope import build_envelope
+from .envelope import _own_domain, build_envelope
 from .discovery import BLOCKED_DISCOVERY_HOSTS, build_company_search_query, choose_search_candidate, parse_brave_web_results
 from .evidence import evidence, utc_now
 from .http import fetch_json
-from .identity import apply_website_identity_gate
+from .identity import apply_website_identity_gate, publishable_social_links
 from .jobs_nav import NavJobIndex, match_company_jobs, raw_tokens
 from .official import fetch_official_modules, set_accounts_lanes
 from .rawstore import set_raw_store
@@ -196,10 +196,7 @@ def research_website(profile: dict[str, Any], url: str | None, *, discovery: str
                 "status": "exact", "publishable": True, "score": 0.92, "method": "nav_employer_declared_homepage_v1",
                 "reasons": [*assessment.get("reasons", []), f"homepage declared by employer orgnr {declared_by.get('employer_orgnr')} in NAV ad {declared_by.get('uuid')}"],
             })
-            value["social_links"] = [
-                {key: item[key] for key in ("platform", "url", "declared_in") if key in item}
-                for item in value.get("social_link_assessments") or [] if item.get("publishable")
-            ]
+            value["social_links"] = publishable_social_links(value)
     if value:
         value["discovery_method"] = discovery
     publishable = bool(assessment.get("publishable"))
@@ -369,7 +366,7 @@ def _crawl_and_gate(profile: dict[str, Any], probe: dict[str, Any], target: str,
         "status": "exact", "publishable": True, "method": f"{discovery}_v2", "score": score,
         "reasons": [*assessment.get("reasons", []), f"{discovery.replace('_', ' ')} {verdict}"],
     })
-    value["social_links"] = [{key: item[key] for key in ("platform", "url", "declared_in") if key in item} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
+    value["social_links"] = publishable_social_links(value)
     value["discovery_method"] = discovery
     profile["evidence"]["website"] = gated
     return True, {"result": "verified"}
@@ -404,7 +401,7 @@ _search_quota = _SearchQuota(0)
 
 def reset_search_quota(maximum: int) -> None:
     global _search_quota
-    _search_quota = _SearchQuota(max(0, maximum), float(os.environ.get("SIGNALPOST_SEARCH_MIN_INTERVAL", 0.06)))
+    _search_quota = _SearchQuota(max(0, maximum), env_number("SIGNALPOST_SEARCH_MIN_INTERVAL", 0.06))
 
 
 def search_api_key() -> str:
@@ -430,19 +427,35 @@ def discover_by_search(profile: dict[str, Any], *, search: Callable[[str, str], 
         return None
     if active_budget().remaining < 300:
         return {"skipped": "request budget reserved for mandatory sources"}
+    try:
+        query = build_company_search_query(profile)
+    except ValueError as exc:
+        return {"error": str(exc)}
     if not _search_quota.take():
         return {"skipped": "search query quota used"}
-    query = build_company_search_query(profile)
     profile["search_queries"] = int(profile.get("search_queries") or 0) + 1
     try:
         results = search(query, api_key)
     except Exception as exc:
         return {"query": query, "error": f"{type(exc).__name__}: {exc}"}
-    blocked = lambda host: any(host == item or host.endswith("." + item) for item in BLOCKED_DISCOVERY_HOSTS)  # noqa: E731
-    candidates = [item for item in choose_search_candidate(profile, results)["candidates"] if item.get("url") and not blocked(item.get("host") or "")]
+    # Directories and registries print the legal name and org number of every company, so an org number
+    # on the page proves nothing there. Only a domain named after the company is a candidate, and it
+    # is crawled from its root.
+    roots: list[str] = []
+    for item in choose_search_candidate(profile, results)["candidates"]:
+        host = item.get("host") or ""
+        if not item.get("url") or item.get("status") == "rejected" and not item.get("score") or any(host == entry or host.endswith("." + entry) for entry in BLOCKED_DISCOVERY_HOSTS):
+            continue
+        if not _own_domain(host, str(profile.get("name") or "")):
+            continue
+        parsed = urllib.parse.urlparse(item["url"])
+        root = f"{parsed.scheme}://{parsed.netloc}/"
+        if root not in roots:
+            roots.append(root)
     identity = registry_identity(profile)
     tried: list[dict[str, Any]] = []
-    for candidate in candidates[:3]:
+    for root in roots[:3]:
+        candidate = {"url": root}
         probe, _ = fetch_website(candidate["url"], identity=identity, max_pages=0)
         if probe.get("status") != "available":
             tried.append({"url": candidate["url"], "result": probe.get("note") or probe.get("status")})
@@ -450,8 +463,7 @@ def discover_by_search(profile: dict[str, Any], *, search: Callable[[str, str], 
         probe["value"]["registry_listed"] = False
         probe_value = apply_website_identity_gate(profile, probe)["website"].get("value") or {}
         markers = {marker for items in (probe_value.get("identity_markers") or {}).values() for marker in items}
-        number_in_result = any("organisation number" in reason for reason in candidate.get("reasons") or [])
-        if not markers and not number_in_result and (probe_value.get("identity_assessment") or {}).get("score", 0) < 0.85:
+        if not markers and (probe_value.get("identity_assessment") or {}).get("score", 0) < 0.85:
             tried.append({"url": candidate["url"], "result": "homepage does not name the company"})
             continue
         published, outcome = _crawl_and_gate(profile, probe, candidate["url"], "search_discovered_website", identity)
@@ -502,7 +514,7 @@ def research_discovery(profile: dict[str, Any]) -> None:
                 assessment.update({"status": "exact", "publishable": True, "method": "previously_verified_recheck_v1",
                                    "score": max(float(assessment.get("score") or 0), 0.93),
                                    "reasons": [*assessment.get("reasons", []), f"re-verified site from previous run (markers: {sorted(markers)})"]})
-                value["social_links"] = [{key: item[key] for key in ("platform", "url", "declared_in") if key in item} for item in value.get("social_link_assessments") or [] if item.get("publishable")]
+                value["social_links"] = publishable_social_links(value)
                 value["discovery_method"] = known.get("discovery") or "previously_verified"
                 profile["evidence"]["website"] = gated
                 return
@@ -523,6 +535,24 @@ def research_company(profile: dict[str, Any]) -> dict[str, Any]:
     return profile
 
 
+_attribution_lock = threading.Lock()
+
+
+def _attribute(profile: dict[str, Any], *, runtime_ms: int = 0, requests: int = 0) -> None:
+    """Add work to a company's totals; the accounts thread and the phase workers can finish the same company at once."""
+    with _attribution_lock:
+        profile["runtime_ms"] = int(profile.get("runtime_ms") or 0) + runtime_ms
+        profile["requests"] = int(profile.get("requests") or 0) + requests
+
+
+def env_number(name: str, default: float) -> float:
+    """A numeric limit from the environment; a malformed value must not stop the run, so it falls back to the default."""
+    try:
+        return type(default)(os.environ[name])
+    except (KeyError, ValueError):
+        return default
+
+
 def _guarded(step: Callable[[dict[str, Any]], None], profile: dict[str, Any]) -> None:
     started, requests_before = time.monotonic(), thread_requests()
     try:
@@ -531,8 +561,7 @@ def _guarded(step: Callable[[dict[str, Any]], None], profile: dict[str, Any]) ->
         profile["errors"].append({"source": step.__name__, "error": f"budget_exhausted: {exc}"})
     except Exception as exc:
         profile["errors"].append({"source": step.__name__, "error": f"{type(exc).__name__}: {exc}", "trace": traceback.format_exc(limit=3)})
-    profile["runtime_ms"] = int(profile.get("runtime_ms") or 0) + int((time.monotonic() - started) * 1000)
-    profile["requests"] = int(profile.get("requests") or 0) + thread_requests() - requests_before
+    _attribute(profile, runtime_ms=int((time.monotonic() - started) * 1000), requests=thread_requests() - requests_before)
 
 
 def run_phase(
@@ -677,8 +706,8 @@ def run_batch(
         max_requests = max(200, int(requests_per_company * max(1, len(orgs))))
     set_accounts_lanes(accounts_lanes)
     set_raw_store(state)  # raw responses behind every claim are kept under <state>/raw
-    search_cost = float(os.environ.get("SIGNALPOST_SEARCH_COST_PER_QUERY", 0.005))
-    reset_search_quota(int(os.environ.get("SIGNALPOST_SEARCH_MAX_QUERIES", len(orgs))) if search_api_key() else 0)
+    search_cost = env_number("SIGNALPOST_SEARCH_COST_PER_QUERY", 0.005)
+    reset_search_quota(env_number("SIGNALPOST_SEARCH_MAX_QUERIES", len(orgs)) if search_api_key() else 0)
     budget = set_active_budget(RequestBudget(max_requests=max_requests, deadline_seconds=deadline_minutes * 60, reserve=40))
     report_limits = {"max_requests": max_requests, "deadline_minutes": deadline_minutes, "workers": workers, "accounts_lanes": accounts_lanes}
     log(f"{run_id}: {len(orgs)} organisation numbers ({len(invalid)} invalid rows)")
@@ -807,7 +836,7 @@ def run_batch(
 
 def evidence_metrics(envelopes: list[dict[str, Any]]) -> dict[str, Any]:
     """How complete the evidence behind the published claims is, for the run report."""
-    totals = {"claims": 0, "with_source_and_retrieval_time": 0, "with_content_hash": 0, "with_quoted_span": 0, "with_locator": 0,
+    totals = {"claims": 0, "with_source_and_retrieval_time": 0, "with_content_hash": 0, "with_any_span": 0, "with_quoted_span": 0, "with_locator": 0,
               "with_stored_snapshot": 0, "accounts_claims": 0, "accounts_claims_with_reporting_period": 0}
     for envelope in envelopes:
         records = {item.get("evidence_id"): item for item in envelope.get("evidence") or []}
@@ -816,7 +845,8 @@ def evidence_metrics(envelopes: list[dict[str, Any]]) -> dict[str, Any]:
             totals["claims"] += 1
             totals["with_source_and_retrieval_time"] += bool(sources) and all(item.get("source_url") and item.get("retrieved_at") for item in sources)
             totals["with_content_hash"] += any(item.get("content_sha256") for item in sources)
-            totals["with_quoted_span"] += bool(claim.get("claim_span"))
+            totals["with_any_span"] += bool(claim.get("claim_span"))
+            totals["with_quoted_span"] += claim.get("span_kind") == "source_text"  # found verbatim in the fetched source
             totals["with_locator"] += bool(claim.get("locator"))
             totals["with_stored_snapshot"] += any(item.get("snapshot_path") for item in sources)
             if claim.get("family") == "annual_accounts":
@@ -831,7 +861,7 @@ def _safe(function: Callable[..., Any], profile: dict[str, Any], *args: Any) -> 
         function(profile, *args)
     except Exception as exc:
         profile.setdefault("errors", []).append({"source": function.__name__, "error": f"{type(exc).__name__}: {exc}"})
-    profile["requests"] = int(profile.get("requests") or 0) + thread_requests() - requests_before
+    _attribute(profile, requests=thread_requests() - requests_before)
 
 
 def write_outputs(out: Path, state: Path, run_id: str, envelopes: list[dict[str, Any]]) -> None:

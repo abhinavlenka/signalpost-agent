@@ -10,7 +10,7 @@ Every outbound request, including redirects, retries and robots.txt, passes one 
 | Annual accounts | `data.brreg.no/regnskapsregisteret` | 1 to 8 | narrow lane, steady jittered retries, then a second sweep for failures |
 | Company website | the company's own site | at most 8 plus redirects: robots.txt, homepage, up to 5 priority pages, the declared feed | none; a failed page is skipped |
 | Website discovery | register e-mail domain and name-derived domains | at most 4 homepage probes and 2 bounded crawls | none |
-| Search candidates (optional) | Brave Search API | 1 query and at most 3 candidate probes | 2 attempts; capped per run |
+| Search candidates (optional) | Brave Search API | 1 query and at most 3 probes of domains named after the company | 2 attempts; capped per run |
 | Jobs | NAV `pam-stilling-feed` | about 97 feed pages per run, shared by all companies, plus 1 per candidate ad | 3 attempts |
 
 ## Website crawl rules

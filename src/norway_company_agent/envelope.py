@@ -62,7 +62,20 @@ def _norm(value: Any) -> str:
 
 
 _ANY = object()
-_JSON_VALUE = r'(\{[^{}]*\}|\[[^\[\]]*\]|"(?:[^"\\]|\\.)*"|[^,\s}\]]+)'
+# A scalar never starts with a brace, bracket or quote: otherwise a nested object would be swallowed
+# as a "scalar" and hide an inner key of the same name in compact JSON.
+_JSON_VALUE = r'(\{[^{}]*\}|\[[^\[\]]*\]|"(?:[^"\\]|\\.)*"|[^,\s}\]{\["]+)'
+
+
+class Quote(str):
+    """A span with its provenance: ``exact`` when the text was found in the stored source, not rendered from parsed data."""
+
+    exact: bool
+
+    def __new__(cls, text: str, exact: bool = False) -> "Quote":
+        item = super().__new__(cls, text)
+        item.exact = exact
+        return item
 
 
 def _clip(text: str, limit: int = 300) -> str:
@@ -82,14 +95,22 @@ def _same_json(text: str, expected: Any) -> bool:
     return actual == expected
 
 
-def quote_json(raw_text: str | None, key: str, expected: Any = _ANY, fallback: Any = None) -> str:
-    """The ``"key" : value`` text exactly as the source sent it; a canonical rendering when the raw text is unavailable."""
+def quote_json(raw_text: str | None, key: str, expected: Any = _ANY, fallback: Any = None, suffix: str = "") -> Quote:
+    """The ``"key" : value`` text exactly as the source sent it (``exact``); a rendering of the parsed value otherwise."""
     if raw_text:
         for match in re.finditer(rf'"{re.escape(key)}"\s*:\s*{_JSON_VALUE}', raw_text):
             if expected is _ANY or _same_json(match.group(1), expected):
-                return _clip(match.group(0))
+                return Quote(_clip(match.group(0)) + suffix, exact=True)
     shown = fallback if fallback is not None else (None if expected is _ANY else expected)
-    return _clip(f'"{key}": {json.dumps(shown, ensure_ascii=False, default=str)}')
+    return Quote(_clip(f'"{key}": {json.dumps(shown, ensure_ascii=False, default=str)}') + suffix, exact=False)
+
+
+def index_quotes(raw_text: str | None, key: str) -> dict[str, str]:
+    """One pass over a large response: every ``"key" : "value"`` occurrence by value (first wins)."""
+    found: dict[str, str] = {}
+    for match in re.finditer(rf'"{re.escape(key)}"\s*:\s*"((?:[^"\\]|\\.)*)"', raw_text or ""):
+        found.setdefault(match.group(1), " ".join(match.group(0).split()))
+    return found
 
 
 RIGHTS_BY_SOURCE = {
@@ -191,6 +212,8 @@ class EnvelopeBuilder:
             "evidence_ids": [evidence_id],
             "locator": locator,
             "claim_span": _clip(span) if span else _clip(f'"{field}": {json.dumps(value, ensure_ascii=False, default=str)}'),
+            # source_text: found verbatim in the fetched source; rendered_value: written out from the parsed value
+            "span_kind": "source_text" if getattr(span, "exact", False) else "rendered_value",
             "value_hash": _hash(value)[:16],
         })
 
@@ -328,7 +351,7 @@ def build_identity(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
             eid = _official_evidence(builder, group, "brreg_group_structure_v1")
             for link in links:
                 builder.claim("group_relationships", link["relation"], link, eid, identity=[link["relation"], link["organisation_number"]], locator="$..children", effective_date=link.get("as_of"),
-                              span=quote_json(group.get("raw_text"), "organisasjonsnummer", link["organisation_number"]) + f" ({link['relation']}: {link.get('name')})")
+                              span=quote_json(group.get("raw_text"), "organisasjonsnummer", link["organisation_number"], suffix=f" ({link['relation']}: {link.get('name')})"))
         else:
             builder.state("group_relationships", "not_available" if g_state == "available" else g_state, g_reason or "no group links returned")
     elif value is not None and not value.get("in_group"):
@@ -353,7 +376,7 @@ def build_accounts(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
                     "annual_accounts", field, {"amount": amount, "currency": item.get("currency"), "account_type": item.get("account_type")},
                     eid, identity=[field, period_label, item.get("account_type")], locator=f"$[{index}].{field}",
                     reporting_period=period_label, effective_date=period.get("tilDato"),
-                    span=quote_json(record.get("raw_text"), ACCOUNT_SOURCE_KEYS[field], amount) + f" (regnskapsperiode {period_label})",
+                    span=quote_json(record.get("raw_text"), ACCOUNT_SOURCE_KEYS[field], amount, suffix=f" (regnskapsperiode {period_label})"),
                 )
         builder.state("annual_accounts", "available")
     elif state == "available":
@@ -376,18 +399,17 @@ def build_accounts(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
             builder.claim("filing_history", "filed_annual_account_copy", year, eid, locator="$[*]")
 
 
-def _role_quote(raw_text: str | None, role: dict[str, Any]) -> str:
+def _role_quote(raw_text: str | None, role: dict[str, Any]) -> Quote:
     """Quote the role holder as the roles register names them, followed by the role."""
-    name, holder = str(role.get("name") or ""), None
+    name, suffix = " ".join(str(role.get("name") or "").casefold().split()), f" · rolle: {role.get('role')} ({role.get('role_code')})"
     if raw_text and name:
-        surnames = [match for match in re.finditer(r'"etternavn"\s*:\s*"((?:[^"\\]|\\.)*)"', raw_text) if name.casefold().endswith(match.group(1).casefold())]
-        if surnames:
-            holder = _clip(surnames[0].group(0))
-    if holder is None and role.get("organisation_number"):
-        holder = quote_json(raw_text, "organisasjonsnummer", role.get("organisation_number"))
-    if holder is None:
-        holder = f'"navn": {json.dumps(name, ensure_ascii=False)}'
-    return f"{holder} · rolle: {role.get('role')} ({role.get('role_code')})"
+        for match in re.finditer(r'"etternavn"\s*:\s*"((?:[^"\\]|\\.)*)"', raw_text):
+            surname = " ".join(match.group(1).casefold().split())
+            if surname and (name == surname or name.endswith(" " + surname)):  # whole words only: "Lindberg" is not "Berg"
+                return Quote(_clip(match.group(0)) + suffix, exact=True)
+    if role.get("organisation_number"):
+        return quote_json(raw_text, "organisasjonsnummer", role.get("organisation_number"), suffix=suffix)
+    return Quote(f'"navn": {json.dumps(str(role.get("name") or ""), ensure_ascii=False)}' + suffix, exact=False)
 
 
 def build_leadership(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
@@ -423,6 +445,7 @@ def build_leadership(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
     locations = ((loc_record or {}).get("value") or {}).get("locations") or []
     if l_state == "available" and locations:
         eid = _official_evidence(builder, loc_record, "brreg_subunits_json_v1")
+        numbers = index_quotes(loc_record.get("raw_text"), "organisasjonsnummer")  # a chain can have a thousand sub-units: scan once
         for index, location in enumerate(locations):
             value = {
                 "organisation_number": location.get("organisation_number"),
@@ -433,7 +456,8 @@ def build_leadership(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
                 "registered_employees": location.get("employees"),
             }
             builder.claim("registered_workplaces", "registered_workplace", value, eid, identity=location.get("organisation_number"), locator=f"$._embedded.underenheter[{index}]",
-                          span=quote_json(loc_record.get("raw_text"), "organisasjonsnummer", location.get("organisation_number")) + " · " + quote_json(loc_record.get("raw_text"), "navn", location.get("name")))
+                          span=Quote(f"{numbers[location.get('organisation_number')]} ({location.get('name')})", exact=True) if location.get("organisation_number") in numbers
+                          else Quote(f'"organisasjonsnummer": "{location.get("organisation_number")}" ({location.get("name")})', exact=False))
     elif l_state == "available":
         builder.state("registered_workplaces", "not_available", "no registered subunits")
     else:
@@ -472,7 +496,7 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
         third_party = scope == "page_on_third_party_site"
         span = "; ".join(assessment.get("reasons") or [])
         if proof:
-            span += f"; on the site: “{proof}”"
+            span = Quote(span + f"; on the site: “{proof}”", exact=True)
         if scope == "possibly_group_or_international":
             span += "; site scope: possibly a group or international site (no organisation number on site, non-.no domain)"
         if third_party:
@@ -480,13 +504,13 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
         builder.claim("official_website", "official_website", _without_default_port(value.get("final_url")), eid, identity="official_website",
                       locator="html (identity gate)", span=span, confidence=float(assessment.get("score") or 0.9) if scope not in {"possibly_group_or_international", "page_on_third_party_site"} else 0.8)
         builder.claim("public_brand", "website_scope", scope, eid, identity="website_scope", locator="identity_markers",
-                      span=proof or f"{urllib.parse.urlparse(value.get('final_url') or '').hostname}: {'; '.join(assessment.get('reasons') or [])}")
+                      span=Quote(proof, exact=True) if proof else f"{urllib.parse.urlparse(value.get('final_url') or '').hostname}: {'; '.join(assessment.get('reasons') or [])}")
         brand = None if third_party else value.get("site_name") or value.get("title")
         if brand:
-            builder.claim("public_brand", "website_brand_title", brand[:200], eid, identity="website_brand_title", locator="html>head>title", span=brand[:200])
+            builder.claim("public_brand", "website_brand_title", brand[:200], eid, identity="website_brand_title", locator="html>head>title", span=Quote(brand[:200], exact=True))
         if value.get("description") and not third_party:
             builder.claim("public_brand", "self_description", value["description"][:600], eid, identity="self_description", locator='meta[name="description"]',
-                          span=value["description"])
+                          span=Quote(value["description"], exact=True))
         builder.state("official_website", "available", None, discovery=value.get("discovery_method") or "registry_listed")
         social = [] if third_party else value.get("social_links") or []
         if scope == "possibly_group_or_international":
@@ -502,9 +526,15 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
             builder.claim("jobs", "careers_page", page, eid, identity=["careers_page", page], locator="a[href]",
                           span=f"careers page linked from the verified company website: {page}")
         for item in [] if group_site else value.get("news_items") or []:
+            # cite the page or feed the item was read from, not the homepage
+            found_in = item.get("found_in") or {}
+            news_eid = eid if not found_in.get("content_sha256") or found_in.get("content_sha256") == value.get("content_sha256") else builder.add_evidence(
+                source_url=found_in.get("url"), source_class=website.get("source_type") or "company_website", retrieved_at=found_in.get("retrieved_at") or website.get("retrieved_at"),
+                content_sha256=found_in.get("content_sha256"), extraction_method="site_feed_v1" if str(item.get("locator") or "").startswith(("rss:", "atom:")) else "site_page_markup_v1",
+                span=f"dated items on the verified site {urllib.parse.urlparse(value.get('final_url') or '').hostname}")
             builder.claim("dated_activity", "website_news", {"date": item.get("date"), "title": item.get("title"), "url": item.get("url")},
-                          eid, identity=["website_news", item.get("url")], effective_date=item.get("date"), locator=item.get("locator"),
-                          span=f"{item.get('title')} ({item.get('locator')}: {item.get('date')})")
+                          news_eid, identity=["website_news", item.get("url")], effective_date=item.get("date"), locator=item.get("locator"),
+                          span=Quote(f"{item.get('title')} ({item.get('locator')}: {item.get('date')})", exact=True))
     elif state == "available":
         builder.state("official_website", "ambiguous", "candidate site failed exact-entity identity gate: " + "; ".join(assessment.get("reasons") or []),
                       candidate=value.get("final_url"))
@@ -565,7 +595,7 @@ def website_scope(value: dict[str, Any], legal_name: str | None = None, legal_fo
     if parsed.path.strip("/") and legal_name and not _own_domain(host, legal_name):
         return "page_on_third_party_site"
     if host.endswith(".no"):
-        return "verified_by_registered_address_or_phone" if markers & {"address", "phone"} else "norwegian_domain"
+        return "norwegian_domain"  # stable between runs: it must not depend on which secondary pages answered
     # On an international domain only the homepage counts: a group's contact page lists every
     # subsidiary's office, so an address there does not make the site the subsidiary's own.
     if {"address", "phone"} & set((value.get("identity_markers") or {}).get(value.get("final_url")) or []):

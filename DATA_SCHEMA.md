@@ -60,7 +60,8 @@ The state always comes with a `reason`. **Absence is never converted to zero.** 
   "effective_date": "2025-12-31",
   "evidence_ids": ["ev-3b96…"],
   "locator": "$.rollegrupper[*].roller[*]",       // JSON path, CSS selector or markup locator
-  "claim_span": "\"etternavn\" : \"Aas\" · rolle: Daglig leder (DAGL)",   // the source text the claim rests on, quoted as received
+  "claim_span": "\"etternavn\" : \"Aas\" · rolle: Daglig leder (DAGL)",   // the source text the claim rests on
+  "span_kind": "source_text",                     // source_text: found verbatim in the fetched source; rendered_value: written out from the parsed value
   "value_hash": "…",                              // used by refresh
   "first_seen": "…", "last_seen": "…",
   "stale": true,        // only when carried forward because the source failed this run
@@ -93,7 +94,8 @@ The state always comes with a `reason`. **Absence is never converted to zero.** 
 
 ### Spans and snapshots
 
-- Every claim has a `claim_span`. For register data it is the `"key" : value` text exactly as the API returned it. For website data it is the text or markup the fact was read from.
+- Every claim has a `claim_span` and a `span_kind`. `source_text` means the span was found verbatim in the fetched source: for register data the `"key" : value` text exactly as the API returned it, for website data the page text. `rendered_value` means the exact text could not be located (or the source is carried from an earlier run), and the span is the parsed value written out. The run report counts both.
+- News items cite the page or feed they were read from as their own evidence record, not the homepage.
 - Every response that becomes evidence is stored once, gzip-compressed, at `<state>/raw/<first two hex chars>/<sha256>.gz`. `content_sha256` is the hash of those bytes, so a claim can be checked against what was fetched.
 - The NAV feed pages and search-API responses are not stored: they are used to find candidates, not as claim evidence.
 
@@ -104,10 +106,10 @@ The `website_scope` claim says how the published site is tied to the entity:
 | Value | Meaning |
 |---|---|
 | `exact_entity_verified_by_organisation_number` | the organisation number is on the site |
-| `verified_by_registered_address_or_phone` | the registered address or phone is on the site |
-| `norwegian_domain` | verified by legal name on a `.no` domain |
+| `norwegian_domain` | verified on a `.no` domain without the organisation number on the site |
+| `verified_by_registered_address_or_phone` | a non-`.no` domain whose homepage carries the registered address or phone |
 | `public_company_own_site` | verified by legal name; the entity is a Norwegian public company (ASA) |
-| `possibly_group_or_international` | verified by name only on a non-`.no` domain; only Norway-specific profiles are published, and no news |
+| `possibly_group_or_international` | a non-`.no` domain without that proof on its homepage, where the entity is not a public company; only Norway-specific profiles are published, and no news |
 | `page_on_third_party_site` | a page about the company on a chain, directory or platform; only the URL is published |
 
 ## Field families

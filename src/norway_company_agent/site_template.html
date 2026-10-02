@@ -436,7 +436,7 @@ function fmtValue(c) {
 function evidenceHtml(c, evidence) {
   const lines = (c.evidence_ids||[]).map(id => { const e = evidence[id]; if (!e) return ""; const url = e.final_url || e.source_url;
     return `<div class="ev"><span title="${esc([e.rights && "Rights: " + e.rights, e.snapshot_path && "Raw snapshot: " + e.snapshot_path].filter(Boolean).join("\n"))}">Source: ${link(url, SOURCE_LABEL[e.source_class] || human(e.source_class || "source"))}${safeUrl(url) ? ` <span class="sub">(${esc(host(url))})</span>` : ""}</span><span>retrieved ${esc((e.retrieved_at||"").slice(0,16).replace("T"," "))} UTC</span>${e.content_sha256 ? `<span title="SHA-256 of the fetched content: ${esc(e.content_sha256)}">sha256 <code>${esc(e.content_sha256.slice(0,10))}</code></span>` : ""}${c.locator ? `<span>at <code>${esc(c.locator)}</code></span>` : ""}${e.from_previous_run ? "<span>from previous run</span>" : ""}</div>`; }).join("");
-  return lines + (c.claim_span ? `<div class="ev"><span>Quoted source: <code>${esc(c.claim_span)}</code></span></div>` : "") + (typeof c.confidence === "number" && c.confidence < 1 ? `<div class="ev"><span>Confidence ${Math.round(c.confidence*100)}%</span></div>` : "");
+  return lines + (c.claim_span ? `<div class="ev"><span title="${c.span_kind === "source_text" ? "Found verbatim in the fetched source" : "Written out from the parsed source value"}">${c.span_kind === "source_text" ? "Quoted source" : "Source value"}: <code>${esc(c.claim_span)}</code></span></div>` : "") + (typeof c.confidence === "number" && c.confidence < 1 ? `<div class="ev"><span>Confidence ${Math.round(c.confidence*100)}%</span></div>` : "");
 }
 function claimsTable(org, claims, evidence, limit = 8) {
   const collapsed = claims.length > limit + 2;
@@ -517,9 +517,9 @@ async function renderCompany(org) {
   $("#pin").onclick = e => { const on = !pins.has(org); on ? pins.add(org) : pins.delete(org); savePins(); e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.textContent = on ? "Pinned" : "Pin"; say(on ? "Pinned. Find pinned companies with the Pinned filter in the list." : "Unpinned"); };
   $("#x-json").onclick = () => download(`signalpost-${org}.json`, JSON.stringify(env, null, 2), "application/json");
   $("#x-csv").onclick = () => {
-    const cols = ["claim_id", "section", "family", "field", "value", "reporting_period", "effective_date", "confidence", "quoted_source", "locator", "source_url", "source_class", "retrieved_at", "content_sha256", "snapshot_path", "rights"];
+    const cols = ["claim_id", "section", "family", "field", "value", "reporting_period", "effective_date", "confidence", "span", "span_kind", "locator", "source_url", "source_class", "retrieved_at", "content_sha256", "snapshot_path", "rights"];
     const cell = csvCell;
-    const lines = claims.map(c => { const e = evidence[(c.evidence_ids||[])[0]] || {}; return [c.claim_id, c.section, c.family, c.field, typeof c.value === "object" ? JSON.stringify(c.value) : c.value, c.reporting_period, c.effective_date, c.confidence, c.claim_span, c.locator, e.final_url || e.source_url, e.source_class, e.retrieved_at, e.content_sha256, e.snapshot_path, e.rights].map(cell).join(","); });
+    const lines = claims.map(c => { const e = evidence[(c.evidence_ids||[])[0]] || {}; return [c.claim_id, c.section, c.family, c.field, typeof c.value === "object" ? JSON.stringify(c.value) : c.value, c.reporting_period, c.effective_date, c.confidence, c.claim_span, c.span_kind, c.locator, e.final_url || e.source_url, e.source_class, e.retrieved_at, e.content_sha256, e.snapshot_path, e.rights].map(cell).join(","); });
     download(`signalpost-${org}-evidence.csv`, "\ufeff" + [cols.join(","), ...lines].join("\r\n"), "text/csv;charset=utf-8");
   };
   $$("[data-jump]", app).forEach(b => b.onclick = () => { const el = document.getElementById(b.dataset.jump); if (el) { el.scrollIntoView({block: "start"}); $("h2", el)?.setAttribute("tabindex", "-1"); $("h2", el)?.focus({preventScroll: true}); } });
