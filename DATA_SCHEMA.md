@@ -22,9 +22,10 @@
   "refresh": { /* section 7: refresh metadata */ },
   "changes": [ /* material changes since the previous run */ ],
   "change_log": [ /* all changes across runs, deduplicated by change_id */ ],
-  "summary": {"text": "...", "sentences": [{"text": "...", "claim_ids": ["cl-..."]}], "unknowns": [...], "changes_text": "..."},
+  "summary": {"text": "...", "sentences": [{"text": "...", "claim_ids": ["cl-..."], "section": "finances"}],
+              "sections": [{"key": "finances", "title": "Finances", "text": "..."}], "unknowns": [...], "unknowns_text": "...", "changes_text": "..."},
   "errors": [],
-  "operations": {"runtime_ms": 8120, "third_party_cost_usd": 0}
+  "operations": {"requests": 9, "runtime_ms": 8120, "third_party_cost_usd": 0}
 }
 ```
 
@@ -59,7 +60,7 @@ The state always comes with a `reason`. **Absence is never converted to zero.** 
   "effective_date": "2025-12-31",
   "evidence_ids": ["ev-3b96…"],
   "locator": "$.rollegrupper[*].roller[*]",       // JSON path, CSS selector or markup locator
-  "claim_span": "…",                              // proof text where relevant
+  "claim_span": "\"etternavn\" : \"Aas\" · rolle: Daglig leder (DAGL)",   // the source text the claim rests on, quoted as received
   "value_hash": "…",                              // used by refresh
   "first_seen": "…", "last_seen": "…",
   "stale": true,        // only when carried forward because the source failed this run
@@ -72,19 +73,42 @@ The state always comes with a `reason`. **Absence is never converted to zero.** 
 
 ```jsonc
 {
-  "evidence_id": "ev-…",
+  "id": "ev-…",                         // the key name used by the published output contract
+  "evidence_id": "ev-…",                // same value; kept for earlier consumers
   "source_url": "https://data.brreg.no/enhetsregisteret/api/enheter/888567232",
   "final_url": "…",                     // after redirects
-  "source_class": "official_registry_live | official_annual_accounts | official_roles | official_subunits | official_group_structure | official_role_update_log | official_job_register_nav | registry_linked_company_website | employer_declared_homepage | frozen_universe_snapshot",
+  "source_class": "official_registry_live | official_annual_accounts | official_roles | official_subunits | official_group_structure | official_role_update_log | official_job_register_nav | registry_linked_company_website | registry_email_domain | name_derived_domain | employer_declared_homepage | search_discovered_website | frozen_universe_snapshot",
   "retrieved_at": "2026-09-27T00:31:21Z",
   "http_status": 200,
   "content_sha256": "…",                // hash of the exact response body
   "extraction_method": "brreg_entity_json_v1 | deterministic_name_org_evidence_v2 | nav_feed_entry_json_v1 | …",
   "reporting_period": "2025-01-01..2025-12-31",
   "note": "…",
+  "claim_span": "\"organisasjonsnummer\" : \"888567232\"",   // source text showing the record is about this entity
+  "snapshot_path": "raw/5d/5d3ef6…c57a.gz",   // the stored response, relative to the state directory
+  "rights": "Brønnøysund Register Centre open data, NLOD 2.0",
   "from_previous_run": "run-id"         // evidence carried from the previous snapshot
 }
 ```
+
+### Spans and snapshots
+
+- Every claim has a `claim_span`. For register data it is the `"key" : value` text exactly as the API returned it. For website data it is the text or markup the fact was read from.
+- Every response that becomes evidence is stored once, gzip-compressed, at `<state>/raw/<first two hex chars>/<sha256>.gz`. `content_sha256` is the hash of those bytes, so a claim can be checked against what was fetched.
+- The NAV feed pages and search-API responses are not stored: they are used to find candidates, not as claim evidence.
+
+### Website scope
+
+The `website_scope` claim says how the published site is tied to the entity:
+
+| Value | Meaning |
+|---|---|
+| `exact_entity_verified_by_organisation_number` | the organisation number is on the site |
+| `verified_by_registered_address_or_phone` | the registered address or phone is on the site |
+| `norwegian_domain` | verified by legal name on a `.no` domain |
+| `public_company_own_site` | verified by legal name; the entity is a Norwegian public company (ASA) |
+| `possibly_group_or_international` | verified by name only on a non-`.no` domain; only Norway-specific profiles are published, and no news |
+| `page_on_third_party_site` | a page about the company on a chain, directory or platform; only the URL is published |
 
 ## Field families
 
@@ -98,6 +122,6 @@ The state always comes with a `reason`. **Absence is never converted to zero.** 
 | leadership | registered roles (CEO, chair, board, deputies, owners), auditor, accountant |
 | registered_workplaces | subunits with address, industry, registered employees |
 | official_website | verified website plus discovery method |
-| company_profiles | social profiles linked from the verified site |
+| company_profiles | social profiles linked from the verified site or declared in its Organization markup |
 | jobs | active NAV job ads (exact orgnr), careers page |
 | dated_activity | website news items, job postings, registered role changes, accounts filed |
