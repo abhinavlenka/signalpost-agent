@@ -1,7 +1,7 @@
 {
   "run_id": "smoke100-refresh",
-  "agent_version": "signalpost-agent/1.0.0",
-  "started_at": "2026-10-02T21:09:02.769741Z",
+  "agent_version": "abhikilde/1.0.0",
+  "started_at": "2026-10-03T10:18:48.516889Z",
   "input": "data/batch-rehearsal-100.txt",
   "invalid_inputs": [],
   "limits": {
@@ -12,9 +12,7 @@
   },
   "universe": {
     "path": "data/signalpost-universe.jsonl.gz",
-    "available": true,
-    "content_sha256": "b82d6a3e7231d1759a958c282bc4366b80ec2fab8095053d8ed7fa9cd01bc838",
-    "matched": 100
+    "available": false
   },
   "previous_envelopes": 100,
   "phases": {
@@ -22,29 +20,29 @@
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 25.9,
-      "requests": 512
+      "seconds": 25.3,
+      "requests": 513
     },
     "registry_websites": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 10.8,
-      "requests": 75
+      "seconds": 11.3,
+      "requests": 74
     },
     "website_discovery": {
       "companies": 96,
       "done": 96,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 250.2,
-      "requests": 423
+      "seconds": 249.2,
+      "requests": 421
     },
     "accounts": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 15.8,
-      "requests": 380
+      "seconds": 15.4,
+      "requests": 384
     }
   },
   "accounts_retry": {
@@ -55,15 +53,15 @@
   },
   "nav": {
     "source": "nav_pam_stilling_feed",
-    "pages": 97,
-    "ads_indexed": 30435,
-    "active_ads": 9483,
+    "pages": 96,
+    "ads_indexed": 30140,
+    "active_ads": 9243,
     "complete": true,
     "error": null,
-    "started_at": "2026-10-02T21:09:04.484605Z",
-    "completed_at": "2026-10-02T21:14:32.060598Z"
+    "started_at": "2026-10-03T10:18:48.563979Z",
+    "completed_at": "2026-10-03T10:24:19.067541Z"
   },
-  "completed_at": "2026-10-02T21:14:32.187206Z",
+  "completed_at": "2026-10-03T10:24:19.192206Z",
   "expected": 100,
   "emitted_envelopes": 100,
   "envelope_states": {
@@ -116,8 +114,8 @@
   "changes": 0,
   "budget": {
     "max_requests": 1900,
-    "requests_used": 1023,
-    "elapsed_seconds": 329.7,
+    "requests_used": 1022,
+    "elapsed_seconds": 331.0,
     "by_purpose": {
       "website": 189,
       "robots": 152,
@@ -126,14 +124,14 @@
       "brreg_roles": 100,
       "brreg_locations": 100,
       "brreg_role_events": 100,
-      "nav_feed": 97,
+      "nav_feed": 96,
       "website_redirect": 78,
       "brreg_group": 6,
       "nav_token": 1
     },
     "top_hosts": {
       "data.brreg.no": 506,
-      "pam-stilling-feed.nav.no": 98,
+      "pam-stilling-feed.nav.no": 97,
       "www.oslofjorden.org": 8,
       "www.vetalis.fr": 8,
       "heidi428.wix.com": 8,
@@ -143,10 +141,10 @@
       "gt-eiendom.no": 6,
       "www.norwegianaerosolutions.no": 6,
       "www.arendalgynekologi.no": 6,
-      "alufence.com": 6,
       "www.carmel.no": 6,
+      "alufence.com": 6,
       "carmel.no": 6,
-      "www.hako.no": 5
+      "www.datanova.no": 5
     }
   },
   "search": {
@@ -174,7 +172,7 @@
     "within_request_cap": true
   },
   "latency_ms": {
-    "p50": 8779,
-    "p95": 125503
+    "p50": 8793,
+    "p95": 125940
   }
 }

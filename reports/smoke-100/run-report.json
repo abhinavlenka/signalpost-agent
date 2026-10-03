@@ -1,7 +1,7 @@
 {
   "run_id": "smoke100-run",
-  "agent_version": "signalpost-agent/1.0.0",
-  "started_at": "2026-10-02T21:03:22.971826Z",
+  "agent_version": "abhikilde/1.0.0",
+  "started_at": "2026-10-03T10:13:13.355097Z",
   "input": "data/batch-rehearsal-100.txt",
   "invalid_inputs": [],
   "limits": {
@@ -12,9 +12,7 @@
   },
   "universe": {
     "path": "data/signalpost-universe.jsonl.gz",
-    "available": true,
-    "content_sha256": "b82d6a3e7231d1759a958c282bc4366b80ec2fab8095053d8ed7fa9cd01bc838",
-    "matched": 100
+    "available": false
   },
   "previous_envelopes": 0,
   "phases": {
@@ -22,29 +20,29 @@
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 26.1,
-      "requests": 511
+      "seconds": 25.7,
+      "requests": 512
     },
     "registry_websites": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 16.7,
-      "requests": 76
+      "seconds": 12.1,
+      "requests": 75
     },
     "website_discovery": {
       "companies": 96,
       "done": 96,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 251.3,
-      "requests": 437
+      "seconds": 250.2,
+      "requests": 434
     },
     "accounts": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 16.0,
-      "requests": 384
+      "seconds": 15.5,
+      "requests": 385
     }
   },
   "accounts_retry": {
@@ -55,15 +53,15 @@
   },
   "nav": {
     "source": "nav_pam_stilling_feed",
-    "pages": 97,
-    "ads_indexed": 30435,
-    "active_ads": 9483,
+    "pages": 96,
+    "ads_indexed": 30140,
+    "active_ads": 9243,
     "complete": true,
     "error": null,
-    "started_at": "2026-10-02T21:03:24.737416Z",
-    "completed_at": "2026-10-02T21:09:01.666720Z"
+    "started_at": "2026-10-03T10:13:13.356836Z",
+    "completed_at": "2026-10-03T10:18:47.290963Z"
   },
-  "completed_at": "2026-10-02T21:09:01.787268Z",
+  "completed_at": "2026-10-03T10:18:47.422370Z",
   "expected": 100,
   "emitted_envelopes": 100,
   "envelope_states": {
@@ -116,8 +114,8 @@
   "changes": 0,
   "budget": {
     "max_requests": 1900,
-    "requests_used": 1037,
-    "elapsed_seconds": 339.1,
+    "requests_used": 1036,
+    "elapsed_seconds": 334.4,
     "by_purpose": {
       "website": 195,
       "robots": 155,
@@ -126,14 +124,14 @@
       "brreg_roles": 100,
       "brreg_locations": 100,
       "brreg_role_events": 100,
-      "nav_feed": 97,
+      "nav_feed": 96,
       "website_redirect": 83,
       "brreg_group": 6,
       "nav_token": 1
     },
     "top_hosts": {
       "data.brreg.no": 506,
-      "pam-stilling-feed.nav.no": 98,
+      "pam-stilling-feed.nav.no": 97,
       "www.systemhus.no": 9,
       "www.oslofjorden.org": 8,
       "www.vetalis.fr": 8,
@@ -174,7 +172,7 @@
     "within_request_cap": true
   },
   "latency_ms": {
-    "p50": 10301,
-    "p95": 126174
+    "p50": 8799,
+    "p95": 126025
   }
 }
