@@ -1,4 +1,4 @@
-"""Static Signalpost explorer (GitHub Pages ready, and openable straight from disk) built from terminal envelopes.
+"""Static abhikilde explorer (GitHub Pages ready, and openable straight from disk) built from terminal envelopes.
 
 Output:
   <site>/index.html            single-page app (search, filters, compare, evidence drill-down)

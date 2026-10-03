@@ -1,6 +1,7 @@
 [project]
-name = "norway-company-agent-poc"
-version = "0.1.0"
+name = "abhikilde"
+version = "1.0.0"
+description = "Sourced company-intelligence agent for Norwegian organisation numbers (Builderr Signalpost challenge)"
 requires-python = ">=3.12"
 dependencies = [
   "beautifulsoup4>=4.14,<5",

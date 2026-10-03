@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the static Signalpost explorer from one or more envelopes.jsonl files (see norway_company_agent.site)."""
+"""Build the static abhikilde explorer from one or more envelopes.jsonl files (see abhikilde.site)."""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from norway_company_agent.site import build_site  # noqa: E402
+from abhikilde.site import build_site  # noqa: E402
 
 
 def main() -> None:

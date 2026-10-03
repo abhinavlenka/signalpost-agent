@@ -26,7 +26,7 @@
 |---|---|
 | Brønnøysundregistrene APIs | open data under NLOD 2.0 |
 | NAV pam-stilling-feed | public token; use follows https://arbeidsplassen.nav.no/vilkar-api. Inactive ads are reported only as `closed_job` changes with their title; contact details are never stored. |
-| Company websites | fetched only when robots.txt allows our user agent (`signalpost-agent/1.0`); 4xx robots means no restrictions, 5xx means disallow. At most 8 requests per site plus redirects. Only the company's own facts are extracted. |
+| Company websites | fetched only when robots.txt allows our user agent (`abhikilde/1.0`); 4xx robots means no restrictions, 5xx means disallow. At most 8 requests per site plus redirects. Only the company's own facts are extracted. |
 
 ## Safety
 

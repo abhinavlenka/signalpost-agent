@@ -9,11 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from norway_company_agent.pipeline import run_batch  # noqa: E402
+from abhikilde.pipeline import run_batch  # noqa: E402
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="signalpost", description="Signalpost company-intelligence agent")
+    parser = argparse.ArgumentParser(prog="signalpost", description="abhikilde: company-intelligence agent for Builderr's Signalpost challenge")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="research a batch of organisation numbers")
     run.add_argument("--input", required=True, help="txt/csv/json/jsonl file of organisation numbers")

@@ -1,6 +1,6 @@
 # Refresh semantics
 
-Each run diffs every freshly built envelope against the previous envelope for the same organisation number. The previous envelope comes from `--previous`, or from `state/latest/<org>.json` by default. The logic lives in `src/norway_company_agent/claim_refresh.py`.
+Each run diffs every freshly built envelope against the previous envelope for the same organisation number. The previous envelope comes from `--previous`, or from `state/latest/<org>.json` by default. The logic lives in `src/abhikilde/claim_refresh.py`.
 
 ## Rules
 
@@ -42,7 +42,7 @@ Every run writes an immutable `state/snapshots/<run_id>/envelopes.jsonl`. Eviden
 
 ## Tests
 
-`tests/test_signalpost_agent.py` covers:
+`tests/test_abhikilde.py` covers:
 - idempotent reruns
 - typed role changes
 - financial restatements

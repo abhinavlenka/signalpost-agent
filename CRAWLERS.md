@@ -1,6 +1,6 @@
 # Connectors, budgets and fallback rules
 
-Every outbound request, including redirects, retries and robots.txt, passes one thread-safe governor (`src/norway_company_agent/budget.py`). The run stops fetching when the request cap or the deadline is reached.
+Every outbound request, including redirects, retries and robots.txt, passes one thread-safe governor (`src/abhikilde/budget.py`). The run stops fetching when the request cap or the deadline is reached.
 
 ## Connectors
 
@@ -16,7 +16,7 @@ Every outbound request, including redirects, retries and robots.txt, passes one 
 ## Website crawl rules
 
 - Only public HTTP(S) hosts are fetched. Private, loopback, link-local and reserved addresses are refused, and every redirect target is checked again.
-- robots.txt is honoured for the user agent `signalpost-agent/1.0`. A 4xx robots response means no restrictions; a 5xx means disallow.
+- robots.txt is honoured for the user agent `abhikilde/1.0`. A 4xx robots response means no restrictions; a 5xx means disallow.
 - Static HTML only. No browser, no JavaScript rendering.
 - Priority pages are chosen one per category: about, contact, careers, news, people, locations.
 - A homepage over 2 MB, a page over 1 MB or a feed over 1 MB is not read.

@@ -1,4 +1,4 @@
-"""Signalpost batch pipeline: N organisation numbers in, exactly N terminal envelopes out."""
+"""abhikilde batch pipeline: N organisation numbers in, exactly N terminal envelopes out."""
 from __future__ import annotations
 
 import gzip
@@ -29,7 +29,7 @@ from .site import build_site
 from .summary import build_summary
 from .website import fetch_website
 
-AGENT_VERSION = "signalpost-agent/1.0.0"
+AGENT_VERSION = "abhikilde/1.0.0"
 UNIVERSE_URL = "https://builderr.ai/signalpost-company-universe-2025.jsonl.gz"
 OFFICIAL_MODULES = {"registry_live", "roles", "locations", "financials", "role_events"}
 

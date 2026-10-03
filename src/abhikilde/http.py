@@ -13,7 +13,7 @@ from typing import Any, Callable
 from .budget import BudgetExhausted, active_budget
 from .rawstore import save_raw
 
-USER_AGENT = "signalpost-agent/1.0 (+https://builderr.ai/challenges/signalpost)"
+USER_AGENT = "abhikilde/1.0 (+https://github.com/abhinavlenka/signalpost-agent)"
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 UNSTORED_PURPOSES = {"nav_feed", "nav_token", "search_api"}  # bulk feed pages, tokens and search results are not claim evidence
 

@@ -14,14 +14,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from norway_company_agent.budget import BudgetExhausted, RequestBudget, set_active_budget  # noqa: E402
-from norway_company_agent.claim_refresh import apply_refresh  # noqa: E402
-from norway_company_agent.envelope import STATES, build_envelope  # noqa: E402
-from norway_company_agent.evidence import evidence  # noqa: E402
-from norway_company_agent.jobs_nav import build_name_index, candidate_ads, match_company_jobs  # noqa: E402
-from norway_company_agent.http import FetchResult  # noqa: E402
-from norway_company_agent.pipeline import read_input_orgs  # noqa: E402
-from norway_company_agent.summary import build_summary  # noqa: E402
+from abhikilde.budget import BudgetExhausted, RequestBudget, set_active_budget  # noqa: E402
+from abhikilde.claim_refresh import apply_refresh  # noqa: E402
+from abhikilde.envelope import STATES, build_envelope  # noqa: E402
+from abhikilde.evidence import evidence  # noqa: E402
+from abhikilde.jobs_nav import build_name_index, candidate_ads, match_company_jobs  # noqa: E402
+from abhikilde.http import FetchResult  # noqa: E402
+from abhikilde.pipeline import read_input_orgs  # noqa: E402
+from abhikilde.summary import build_summary  # noqa: E402
 
 RUN = {"run_id": "r1", "started_at": "2026-09-27T00:00:00Z", "completed_at": "2026-09-27T00:01:00Z", "terminal_status": "completed"}
 RUN2 = {"run_id": "r2", "started_at": "2026-09-28T00:00:00Z", "completed_at": "2026-09-28T00:01:00Z", "terminal_status": "completed"}
@@ -214,7 +214,7 @@ def test_recovered_source_is_backfill_not_change():
 
 
 def test_identity_markers_find_orgnr_phone_address_in_footer():
-    from norway_company_agent.website import identity_markers
+    from abhikilde.website import identity_markers
 
     html = "<footer>Aas Elektronikk AS · Org.nr: 888 567&nbsp;232 MVA · Natvigveien 17, 4823 Nedenes · Tlf 900 49 299</footer>"
     identity = {"organisation_number": "888567232", "phones": ["90049299"], "postal_code": "4823", "street": "Natvigveien"}
@@ -223,7 +223,7 @@ def test_identity_markers_find_orgnr_phone_address_in_footer():
 
 
 def test_domain_candidates():
-    from norway_company_agent.pipeline import domain_candidates
+    from abhikilde.pipeline import domain_candidates
 
     assert domain_candidates("SANDNES ELEKTRISKE AS")[:2] == ["sandneselektriske.no", "sandnes-elektriske.no"]
     assert "maalselvbygg.no" in domain_candidates("MÅLSELV BYGG AS") and "malselvbygg.no" in domain_candidates("MÅLSELV BYGG AS")
@@ -293,7 +293,7 @@ def js_payload(path, prefix):
 
 
 def test_site_data_is_script_loadable_so_it_opens_without_a_server(tmp_path):
-    from norway_company_agent.site import build_site
+    from abhikilde.site import build_site
 
     envelope = apply_refresh(None, build_envelope(profile(), run=RUN))
     result = build_site([envelope], tmp_path / "site")
@@ -307,7 +307,7 @@ def test_site_data_is_script_loadable_so_it_opens_without_a_server(tmp_path):
 
 
 def test_run_outputs_include_explorer(tmp_path):
-    from norway_company_agent.pipeline import write_outputs
+    from abhikilde.pipeline import write_outputs
 
     envelope = apply_refresh(None, build_envelope(profile(), run=RUN))
     (tmp_path / "out").mkdir()
@@ -317,7 +317,7 @@ def test_run_outputs_include_explorer(tmp_path):
 
 
 def test_explorer_failure_never_costs_the_envelopes(tmp_path):
-    from norway_company_agent.pipeline import write_outputs
+    from abhikilde.pipeline import write_outputs
 
     out = tmp_path / "out"
     out.mkdir()
@@ -342,7 +342,7 @@ def jsonld_page(kind, headline, url):
 ])
 def test_static_pages_marked_as_articles_are_not_dated_news(headline, url, kept):
     from bs4 import BeautifulSoup
-    from norway_company_agent.website import dated_items
+    from abhikilde.website import dated_items
 
     html = jsonld_page("Article", headline, url)
     titles = [item["title"] for item in dated_items(html, url, BeautifulSoup(html, "html.parser"))]
@@ -391,7 +391,7 @@ def test_own_or_number_verified_sites_keep_their_content(final_url, markers):
 
 
 def test_site_index_row_carries_leaders_and_presence_counts_for_search_and_filters(tmp_path):
-    from norway_company_agent.site import row
+    from abhikilde.site import row
 
     p = chain_profile("https://www.aas.no/")
     p["evidence"]["roles"] = evidence("roles", "available", "official_roles", "https://data.brreg.no/enhetsregisteret/api/enheter/888567232/roller", value={
@@ -405,7 +405,7 @@ def test_site_index_row_carries_leaders_and_presence_counts_for_search_and_filte
 # ---------- final pass: recall, contract and honest states
 
 def test_profiles_declared_in_organisation_markup_and_publisher_meta_are_found():
-    from norway_company_agent.website import page_social_links
+    from abhikilde.website import page_social_links
 
     html = """<html><head>
       <meta property="article:publisher" content="https://www.facebook.com/AasElektronikk/" />
@@ -444,7 +444,7 @@ def gate_profile(name, *, title, text, markers, registry_listed=True, host="http
     ("WORK SYSTEM NORWAY AS", "Hjemmeside", "Work System leverer innredning til varebiler og servicebiler over hele landet. " * 3, ["phone"], False, False),
 ])
 def test_register_listed_site_is_proven_by_registered_contact_details_plus_name(name, title, text, markers, registry_listed, publishable):
-    from norway_company_agent.identity import assess_website_identity
+    from abhikilde.identity import assess_website_identity
 
     host = {"DIPS AS": "https://www.dips.com/", "DRAMMENSVEIEN 133 AS": "https://www.klavenessmarine.com/", "HANSEN EIENDOM AS": "https://www.hansen-bygg.no/",
             "NORDIC BYGG AS": "https://www.hansen-bygg.no/", "A PLACE TO STAY STAVANGER AS": "https://aplacetostaystavanger.com/"}.get(name, "https://www.worksystem.no/")
@@ -500,13 +500,13 @@ def test_envelope_follows_the_published_contract_names():
     ("Verifying deliveries for our customers", "Vi leverer elektronikk til industrien i hele Norge. " * 4, False),
 ])
 def test_bot_challenge_pages_are_recognised(title, text, challenged):
-    from norway_company_agent.website import is_bot_challenge
+    from abhikilde.website import is_bot_challenge
 
     assert is_bot_challenge(title, text) is challenged
 
 
 def test_feed_link_is_taken_from_the_page_head_on_the_same_domain_only():
-    from norway_company_agent.website import declared_feed_url
+    from abhikilde.website import declared_feed_url
 
     head = lambda links: f"<html><head>{links}</head><body></body></html>"  # noqa: E731
     own = '<link rel="alternate" type="application/rss+xml" title="Aas &raquo; Feed" href="https://aas.no/feed/" />'
@@ -518,7 +518,7 @@ def test_feed_link_is_taken_from_the_page_head_on_the_same_domain_only():
 
 
 def test_feed_items_are_dated_news_with_exact_dates():
-    from norway_company_agent.website import feed_items
+    from abhikilde.website import feed_items
 
     rss = """<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Aas</title>
       <item><title>Ny rammeavtale med Bane NOR</title><link>https://aas.no/nyheter/ny-rammeavtale/</link><pubDate>Tue, 15 Sep 2026 08:30:00 +0000</pubDate></item>
@@ -587,7 +587,7 @@ def test_every_claim_and_every_evidence_record_carries_a_span_even_without_raw_t
 
 
 def test_evidence_points_to_the_stored_snapshot_and_states_the_source_rights(tmp_path):
-    from norway_company_agent.rawstore import save_raw, set_raw_store
+    from abhikilde.rawstore import save_raw, set_raw_store
 
     set_raw_store(tmp_path)
     try:
@@ -605,8 +605,8 @@ def test_evidence_points_to_the_stored_snapshot_and_states_the_source_rights(tmp
 # ---------- final pass: per-company request counts, search discovery, summary
 
 def test_requests_are_attributed_to_the_company_being_researched():
-    from norway_company_agent.budget import active_budget
-    from norway_company_agent.pipeline import _guarded
+    from abhikilde.budget import active_budget
+    from abhikilde.pipeline import _guarded
 
     set_active_budget(RequestBudget(max_requests=100))
     try:
@@ -644,7 +644,7 @@ def search_profile():
 
 
 def test_search_discovery_is_off_without_a_key(monkeypatch):
-    from norway_company_agent import pipeline
+    from abhikilde import pipeline
 
     monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
     monkeypatch.delenv("SIGNALPOST_BRAVE_API_KEY", raising=False)
@@ -654,7 +654,7 @@ def test_search_discovery_is_off_without_a_key(monkeypatch):
 
 
 def test_search_candidate_is_published_only_after_the_fetched_site_proves_the_entity(monkeypatch):
-    from norway_company_agent import pipeline
+    from abhikilde import pipeline
 
     monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
     pipeline.reset_search_quota(10)
@@ -677,7 +677,7 @@ def test_search_candidate_is_published_only_after_the_fetched_site_proves_the_en
 
 
 def test_search_candidate_without_registry_proof_on_the_site_is_dropped(monkeypatch):
-    from norway_company_agent import pipeline
+    from abhikilde import pipeline
 
     monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
     pipeline.reset_search_quota(10)
@@ -689,7 +689,7 @@ def test_search_candidate_without_registry_proof_on_the_site_is_dropped(monkeypa
 
 
 def test_search_quota_caps_paid_queries(monkeypatch):
-    from norway_company_agent import pipeline
+    from abhikilde import pipeline
 
     monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
     pipeline.reset_search_quota(1)
@@ -754,7 +754,7 @@ def test_evidence_carried_from_an_older_snapshot_still_has_the_contract_id():
 
 
 def test_feed_on_a_private_host_is_never_fetched(monkeypatch):
-    from norway_company_agent import website
+    from abhikilde import website
 
     opened = []
     monkeypatch.setattr(website, "_open", lambda request, **kwargs: opened.append(request.full_url))
@@ -776,7 +776,7 @@ def test_trend_never_compares_group_accounts_with_company_accounts():
     ("Forsheimer Borettslag", "https://www.usbl.no/", "Usbl - boligbyggelag", False),  # the manager's site, not the housing cooperative's
 ])
 def test_entity_type_words_are_not_part_of_the_distinguishing_name(name, host, title, publishable):
-    from norway_company_agent.identity import assess_website_identity
+    from abhikilde.identity import assess_website_identity
 
     assessment = assess_website_identity(gate_profile(name, title=title, text="Informasjon til beboere og eiere. " * 5, markers=[], host=host))
     assert assessment["publishable"] is publishable
@@ -785,7 +785,7 @@ def test_entity_type_words_are_not_part_of_the_distinguishing_name(name, host, t
 # ---------- fixes from review
 
 def test_feed_in_a_legacy_encoding_keeps_norwegian_letters():
-    from norway_company_agent.website import feed_items
+    from abhikilde.website import feed_items
 
     raw = ('<?xml version="1.0" encoding="ISO-8859-1"?><rss version="2.0"><channel><item><title>Nytt kontor i Bodø åpnet</title>'
            '<link>https://aas.no/nyheter/bodo/</link><pubDate>Tue, 15 Sep 2026 08:30:00 +0000</pubDate></item></channel></rss>').encode("iso-8859-1")
@@ -793,7 +793,7 @@ def test_feed_in_a_legacy_encoding_keeps_norwegian_letters():
 
 
 def test_address_snippet_is_only_recorded_when_the_address_marker_holds():
-    from norway_company_agent.website import identity_markers, marker_snippets
+    from abhikilde.website import identity_markers, marker_snippets
 
     identity = {"organisation_number": "888567232", "phones": [], "postal_code": "0155", "street": "Storgata"}
     html = "<p>Besøk oss i Storgata 12, 5003 Bergen</p>"  # same street name, another town
@@ -803,7 +803,7 @@ def test_address_snippet_is_only_recorded_when_the_address_marker_holds():
 
 
 def test_same_as_is_read_from_the_organisation_only_not_from_authors():
-    from norway_company_agent.website import page_social_links
+    from abhikilde.website import page_social_links
 
     html = """<html><head><script type="application/ld+json">{"@context":"https://schema.org","@graph":[
       {"@type":"Organization","name":"Acme AS","sameAs":["https://www.linkedin.com/company/acme-as"]},
@@ -812,7 +812,7 @@ def test_same_as_is_read_from_the_organisation_only_not_from_authors():
 
 
 def test_role_quote_names_the_right_person():
-    from norway_company_agent.envelope import _role_quote
+    from abhikilde.envelope import _role_quote
 
     raw = '{"rollegrupper":[{"roller":[{"person":{"navn":{"fornavn":"Ola","etternavn":"Berg"}}},{"person":{"navn":{"fornavn":"Kari","etternavn":"Lindberg"}}},{"person":{"navn":{"fornavn":"X","etternavn":""}}}]}]}'
     assert _role_quote(raw, {"name": "Kari Lindberg", "role": "Styremedlem", "role_code": "MEDL"}).startswith('"etternavn":"Lindberg"')
@@ -825,14 +825,14 @@ def test_span_kind_separates_text_quoted_from_the_source_from_rendered_values():
     kinds = {(c["family"], c["field"]): c["span_kind"] for c in build_envelope(p, run=RUN)["claims"]}
     assert kinds[("legal_identity", "legal_name")] == "source_text"           # matched in the stored response
     assert kinds[("annual_accounts", "revenue")] == "rendered_value"          # no raw text for the accounts record here
-    from norway_company_agent.pipeline import evidence_metrics
+    from abhikilde.pipeline import evidence_metrics
 
     totals = evidence_metrics([build_envelope(p, run=RUN)])
     assert 0 < totals["with_quoted_span"] < totals["claims"] == totals["with_any_span"]
 
 
 def test_compact_json_does_not_hide_a_nested_key_of_the_same_name():
-    from norway_company_agent.envelope import quote_json
+    from abhikilde.envelope import quote_json
 
     raw = '[{"resultatregnskapResultat":{"driftsresultat":{"driftsinntekter":{"sumDriftsinntekter":25468413.00},"driftsresultat":4150764.00},"aarsresultat":8108431.00}}]'
     assert quote_json(raw, "driftsresultat", 4150764.0) == '"driftsresultat":4150764.00'
@@ -859,7 +859,7 @@ def test_news_cites_the_feed_or_page_it_was_read_from():
 
 
 def test_broken_feed_link_never_costs_the_website(monkeypatch):
-    from norway_company_agent import website
+    from abhikilde import website
 
     html = b'<html><head><title>Aas Elektronikk AS</title><link rel="alternate" type="application/rss+xml" href="http://[bad/feed"></head><body><p>' + b"Vi leverer elektronikk. " * 20 + b"</p></body></html>"
 
@@ -880,7 +880,7 @@ def test_broken_feed_link_never_costs_the_website(monkeypatch):
 
 
 def test_malformed_limits_in_the_environment_fall_back_to_defaults(monkeypatch):
-    from norway_company_agent.pipeline import env_number
+    from abhikilde.pipeline import env_number
 
     monkeypatch.setenv("SIGNALPOST_SEARCH_MAX_QUERIES", "lots")
     monkeypatch.setenv("SIGNALPOST_SEARCH_COST_PER_QUERY", "0.01")
@@ -889,7 +889,7 @@ def test_malformed_limits_in_the_environment_fall_back_to_defaults(monkeypatch):
 
 
 def test_a_query_that_cannot_be_built_does_not_spend_quota(monkeypatch):
-    from norway_company_agent import pipeline
+    from abhikilde import pipeline
 
     monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-key")
     pipeline.reset_search_quota(5)
@@ -919,21 +919,21 @@ def test_role_change_dates_are_quoted_from_the_update_log():
     ("/jobber/", False), ("/bli-medlem", False), ("/", False),
 ])
 def test_careers_pages_are_matched_on_whole_words(path, careers):
-    from norway_company_agent.website import page_category
+    from abhikilde.website import page_category
 
     assert (page_category("https://aas.no" + path) == "careers") is careers
 
 
 def test_a_projects_link_is_not_followed_as_the_careers_page():
     from bs4 import BeautifulSoup
-    from norway_company_agent.website import _priority_links
+    from abhikilde.website import _priority_links
 
     html = '<a href="/referanser">Våre jobber</a><a href="/om-oss/bli-en-av-oss">Ledige stillinger</a><a href="/produkter/bestilling">Bestilling</a>'
     assert _priority_links("https://aas.no/", BeautifulSoup(html, "html.parser")) == ["https://aas.no/om-oss/bli-en-av-oss"]
 
 
 def test_careers_link_that_redirects_to_the_homepage_is_not_a_careers_page(monkeypatch):
-    from norway_company_agent import website
+    from abhikilde import website
 
     home = b'<html><head><title>Aas Elektronikk AS</title></head><body><a href="/ledige-stillinger">Ledige stillinger</a><p>' + b"Vi leverer elektronikk. " * 20 + b"</p></body></html>"
 
@@ -960,7 +960,7 @@ def test_careers_link_that_redirects_to_the_homepage_is_not_a_careers_page(monke
     ("Welcome to nginx!", "If you see this page, the nginx web server is successfully installed and working. Further configuration is required. " * 3),
 ])
 def test_hosting_placeholders_are_never_published_as_the_company_website(title, text):
-    from norway_company_agent.identity import assess_website_identity
+    from abhikilde.identity import assess_website_identity
 
     assessment = assess_website_identity(gate_profile("VHELP AS", title=title, text=text, markers=[], registry_listed=True, host="http://www.vhelp.as/"))
     assert assessment["publishable"] is False and "placeholder" in assessment["reasons"][0]
@@ -971,7 +971,7 @@ def test_hosting_placeholders_are_never_published_as_the_company_website(title, 
     ("https://www.kitron.com/", False), ("https://career-guide.example.no/", False),
 ])
 def test_a_careers_subdomain_is_a_careers_page(url, careers):
-    from norway_company_agent.website import page_category
+    from abhikilde.website import page_category
 
     assert (page_category(url) == "careers") is careers
 
@@ -982,7 +982,7 @@ def test_published_website_host_is_lower_case():
 
 
 def test_small_batches_still_get_website_discovery(monkeypatch):
-    from norway_company_agent import pipeline
+    from abhikilde import pipeline
 
     set_active_budget(RequestBudget(max_requests=209))  # an 11-company batch
     try:
@@ -999,7 +999,7 @@ def test_small_batches_still_get_website_discovery(monkeypatch):
 
 NODE = shutil.which("node")
 needs_node = pytest.mark.skipif(NODE is None, reason="the explorer's plain-English logic is JavaScript; node runs it here")
-TEMPLATE_PATH = ROOT / "src" / "norway_company_agent" / "site_template.html"
+TEMPLATE_PATH = ROOT / "src" / "abhikilde" / "site_template.html"
 SMOKE_ENVELOPES = ROOT / "reports" / "smoke-100" / "envelopes.jsonl"
 CTX = {"municipalities": ["OSLO", "BERGEN", "INDRE ØSTFOLD"], "forms": ["AS", "ASA", "ENK", "BRL"]}
 ROWS = [
@@ -1122,7 +1122,7 @@ def test_a_refused_search_shows_no_companies_until_the_unsupported_part_is_dropp
 
 @needs_node
 def test_every_example_search_finds_companies_in_the_published_sample():
-    from norway_company_agent.site import row
+    from abhikilde.site import row
 
     rows = [row(json.loads(line)) for line in SMOKE_ENVELOPES.read_text(encoding="utf-8").splitlines() if line.strip()]
     counts = explorer_js("const ctx = SP_NL.contextFor(input.rows); return SP_NL.EXAMPLES.map(q => [q, SP_NL.select(input.rows, SP_NL.parseQuery(q, ctx)).length]);", rows=rows)
@@ -1182,7 +1182,7 @@ def test_an_unmatched_question_says_so_instead_of_guessing():
 
 
 def test_site_index_row_carries_profile_platforms_previous_revenue_and_founding_year():
-    from norway_company_agent.site import row
+    from abhikilde.site import row
 
     p = chain_profile("https://www.aas.no/")
     p["evidence"]["registry_live"]["value"]["founded_date"] = "2005-08-09"

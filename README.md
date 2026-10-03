@@ -1,6 +1,6 @@
-# Signalpost agent
+# abhikilde
 
-A company-intelligence agent for Builderr's Signalpost challenge. You give it Norwegian organisation numbers. For each one it returns a terminal envelope:
+abhikilde is a company-intelligence agent for Builderr's Signalpost challenge. You give it Norwegian organisation numbers. For each one it returns a terminal envelope:
 - claims with sources, retrieval times, content hashes and locators
 - an explicit availability state for every field family
 - a claim-level refresh diff against the previous run

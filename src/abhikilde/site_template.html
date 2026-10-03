@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="description" content="Signalpost explorer: find, compare and verify sourced profiles of Norwegian companies.">
-<title>Signalpost Explorer</title>
+<meta name="description" content="abhikilde explorer: find, compare and verify sourced profiles of Norwegian companies.">
+<title>abhikilde explorer</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231e40af'/%3E%3Cpath d='M9 22V10h3v12zm5.500 0V14h3v8zm5.500 0v-5h3v5z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
 :root {
@@ -267,7 +267,7 @@ input { caret-color: var(--accent); }
 <a class="skip" href="#app">Skip to content</a>
 <header>
   <div class="bar">
-    <a class="brand" href="#/" aria-label="Signalpost explorer, all companies">Signalpost <span>explorer</span></a>
+    <a class="brand" href="#/" aria-label="abhikilde explorer, all companies">abhikilde <span>explorer</span></a>
     <div class="search" role="search">
       <label class="sr-only" for="q">Search companies by name, or describe them in plain English</label>
       <input id="q" type="search" placeholder="Search, or describe: profitable in Oslo" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-keyshortcuts="/">
@@ -760,7 +760,7 @@ function exportCsv(list) {
   const text = [cols.map(c => c[0]).join(","), ...list.map(r => cols.map(c => cell(c[1](r))).join(","))].join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + text], {type: "text/csv;charset=utf-8"}));
-  a.download = "signalpost-companies.csv";
+  a.download = "abhikilde-companies.csv";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   say(`Exported ${list.length} companies as CSV`);
@@ -895,12 +895,12 @@ async function renderCompany(org) {
   const app = $("#app");
   $("#addcmp").onclick = e => { const on = !selected.has(org); if (!toggleCompare(org, on)) return; e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.textContent = on ? "Added to compare" : "Add to compare"; say(on ? "Added to compare" : "Removed from compare"); };
   $("#pin").onclick = e => { const on = !pins.has(org); on ? pins.add(org) : pins.delete(org); savePins(); e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.textContent = on ? "Pinned" : "Pin"; say(on ? "Pinned. Find pinned companies with the Pinned filter in the list." : "Unpinned"); };
-  $("#x-json").onclick = () => download(`signalpost-${org}.json`, JSON.stringify(env, null, 2), "application/json");
+  $("#x-json").onclick = () => download(`abhikilde-${org}.json`, JSON.stringify(env, null, 2), "application/json");
   $("#x-csv").onclick = () => {
     const cols = ["claim_id", "section", "family", "field", "value", "reporting_period", "effective_date", "confidence", "span", "span_kind", "locator", "source_url", "source_class", "retrieved_at", "content_sha256", "snapshot_path", "rights"];
     const cell = csvCell;
     const lines = claims.map(c => { const e = evidence[(c.evidence_ids||[])[0]] || {}; return [c.claim_id, c.section, c.family, c.field, typeof c.value === "object" ? JSON.stringify(c.value) : c.value, c.reporting_period, c.effective_date, c.confidence, c.claim_span, c.span_kind, c.locator, e.final_url || e.source_url, e.source_class, e.retrieved_at, e.content_sha256, e.snapshot_path, e.rights].map(cell).join(","); });
-    download(`signalpost-${org}-evidence.csv`, "\ufeff" + [cols.join(","), ...lines].join("\r\n"), "text/csv;charset=utf-8");
+    download(`abhikilde-${org}-evidence.csv`, "\ufeff" + [cols.join(","), ...lines].join("\r\n"), "text/csv;charset=utf-8");
   };
   const jump = b => b.onclick = () => { const el = document.getElementById(b.dataset.jump); if (el) { el.scrollIntoView({block: "start"}); $("h2", el)?.setAttribute("tabindex", "-1"); $("h2", el)?.focus({preventScroll: true}); } };
   $$("[data-jump]", app).forEach(jump);
