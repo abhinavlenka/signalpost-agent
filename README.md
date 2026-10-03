@@ -72,8 +72,6 @@ Optional search discovery is off unless a key is supplied:
 
 **Not used:** LinkedIn, Meta, Glassdoor, Indeed, Google, scraped search-engine pages, or any unofficial scrapers.
 
-`scripts/` still holds the starter kit's experimental connectors (LinkedIn guest pages, Google Maps, Brave, YouTube and others), kept unchanged because the starter kit's tests cover them. The run command never imports or calls them.
-
 Job-ad contact persons, e-mails and phone numbers are never stored. Personal birth dates from the roles register are discarded.
 
 ## How identity is protected
@@ -133,4 +131,4 @@ uv run --with pytest pytest -q
 
 - **Models:** none. The summary is a deterministic, evidence-bounded template, and every sentence cites claim ids.
 - **Third-party paid APIs:** none by default; expected cost per official run is **$0**. Optional: Brave Search API when `BRAVE_SEARCH_API_KEY` is set, at most one query per input company (about $6 for 1,200 companies at $0.005 per query).
-- **Code:** built on the Builderr Signalpost starter kit. Python dependencies are pinned in `uv.lock`.
+- **Code:** started from the Builderr Signalpost starter kit; the kit's code that this agent does not use has been removed. Python dependencies are pinned in `uv.lock`.
