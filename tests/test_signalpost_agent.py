@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import copy
 import json
+import re
+import shutil
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -990,3 +993,210 @@ def test_small_batches_still_get_website_discovery(monkeypatch):
     finally:
         set_active_budget(None)
     assert "skipped" not in result and result["tried"][-1]["result"] == "verified"
+
+
+# ---------- explorer: plain-English search and questions about one company
+
+NODE = shutil.which("node")
+needs_node = pytest.mark.skipif(NODE is None, reason="the explorer's plain-English logic is JavaScript; node runs it here")
+TEMPLATE_PATH = ROOT / "src" / "norway_company_agent" / "site_template.html"
+SMOKE_ENVELOPES = ROOT / "reports" / "smoke-100" / "envelopes.jsonl"
+CTX = {"municipalities": ["OSLO", "BERGEN", "INDRE ØSTFOLD"], "forms": ["AS", "ASA", "ENK", "BRL"]}
+ROWS = [
+    {"o": "111111111", "n": "NORD BYGG AS", "f": "AS", "m": "OSLO", "i": "Oppføring av bygninger", "e": 25, "r": 40e6, "r0": 30e6, "p": 2e6,
+     "w": "https://nordbygg.no/", "j": 0, "l": ["Kari Nordmann"], "x": 1, "sp": ["linkedin"], "y": 0, "c": 0, "s": "available", "a": {"jobs": "available"}, "k": 50, "fy": 2016},
+    {"o": "222222222", "n": "VEST EIENDOM AS", "f": "AS", "m": "BERGEN", "i": "Utleie av egen eller leid fast eiendom", "e": None, "r": 3e6, "r0": 4e6, "p": -1e6,
+     "w": None, "j": 0, "l": [], "x": 0, "sp": [], "y": 0, "c": 1, "s": "available", "a": {"jobs": "not_available"}, "k": 30, "fy": 1998},
+    {"o": "333333333", "n": "OSLO DATA ASA", "f": "ASA", "m": "OSLO", "i": "Utgivelse av annen programvare", "e": 4, "r": None, "r0": None, "p": 1e5,
+     "w": "https://oslodata.no/", "j": 2, "l": ["Ola Hansen"], "x": 0, "sp": [], "y": 3, "c": 0, "s": "available", "a": {"jobs": "available"}, "k": 40, "fy": 2021},
+]
+
+
+def explorer_js(expr, **inputs):
+    """Evaluate `expr` against the explorer's plain-English module (the template's <script id="sp-nl"> block) in node."""
+    block = re.search(r'<script id="sp-nl">(.*?)</script>', TEMPLATE_PATH.read_text(encoding="utf-8"), re.S)
+    assert block, "the explorer template has no plain-English module"
+    program = block.group(1) + "\nconst input = JSON.parse(require('fs').readFileSync(0, 'utf8'));\nprocess.stdout.write(JSON.stringify((() => { " + expr + " })()));"
+    done = subprocess.run([NODE, "-e", program], input=json.dumps(inputs), capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+def read_as(q, ctx=CTX):
+    return explorer_js("const p = SP_NL.parseQuery(input.q, input.ctx); return {labels: p.filters.map(f => f.label), text: p.text, refused: p.unsupported.map(u => u.term), top: p.top && {n: p.top.n, key: p.top.key}};", q=q, ctx=ctx)
+
+
+def found(q, rows=ROWS, ctx=CTX):
+    return explorer_js("return SP_NL.select(input.rows, SP_NL.parseQuery(input.q, input.ctx)).map(r => r.o);", q=q, rows=rows, ctx=ctx)
+
+
+def smoke_envelope(org):
+    return next(item for item in map(json.loads, SMOKE_ENVELOPES.read_text(encoding="utf-8").splitlines()) if item["organisation_number"] == org)
+
+
+def ask(envelope, q):
+    return explorer_js("return SP_NL.answerQuestion(input.env, input.q);", env=envelope, q=q)
+
+
+@needs_node
+def test_plain_english_search_reads_place_size_and_profit_as_filters():
+    assert read_as("profitable companies in Oslo with more than 10 employees") == {
+        "labels": ["profitable", "in Oslo", "more than 10 employees"], "text": "", "refused": [], "top": None}
+
+
+@needs_node
+def test_a_plain_name_search_is_left_as_text():
+    assert read_as("Data Nova AS") == {"labels": [], "text": "Data Nova AS", "refused": [], "top": None}
+
+
+@needs_node
+def test_a_place_that_is_not_in_the_data_is_left_as_text():
+    assert read_as("construction companies in Tromsø") == {"labels": ["industry: construction"], "text": "tromsø", "refused": [], "top": None}
+
+
+@needs_node
+@pytest.mark.parametrize("q, label", [
+    ("revenue over 5 million", "revenue over NOK 5 m"),
+    ("turnover above 1.5 bn", "revenue over NOK 1.5 bn"),
+    ("more than NOK 500k revenue", "revenue over NOK 500 k"),
+    ("revenue under 2 m", "revenue under NOK 2 m"),
+    ("at least 3 employees", "at least 3 employees"),
+    ("fewer than 50 staff", "fewer than 50 employees"),
+    ("10+ employees", "at least 10 employees"),
+    ("loss-making", "loss-making"),
+    ("with a website", "verified website"),
+    ("that are hiring", "hiring signal"),
+    ("on linkedin", "LinkedIn profile"),
+    ("with news", "news on its website"),
+    ("founded after 2015", "founded after 2015"),
+    ("founded before 2000", "founded before 2000"),
+    ("growing revenue", "revenue up on the year before"),
+    ("AS companies", "legal form AS"),
+    ("construction companies", "industry: construction"),
+    ("in Indre Østfold", "in Indre Østfold"),
+])
+def test_plain_english_phrases_become_named_filters(q, label):
+    assert read_as(q)["labels"] == [label]
+
+
+@needs_node
+def test_top_n_by_a_figure_is_read_as_a_ranking():
+    assert read_as("top 5 by revenue")["top"] == {"n": 5, "key": "rev"}
+
+
+@needs_node
+@pytest.mark.parametrize("q, orgs", [
+    ("profitable companies in Oslo", ["111111111", "333333333"]),
+    ("more than 10 employees", ["111111111"]),
+    ("loss-making real estate companies in Bergen", ["222222222"]),
+    ("with a website and news", ["333333333"]),
+    ("growing revenue", ["111111111"]),
+    ("founded after 2015", ["111111111", "333333333"]),
+    ("data in Oslo", ["333333333"]),
+    ("top 2 by revenue", ["111111111", "222222222"]),
+    ("on linkedin", ["111111111"]),
+])
+def test_plain_english_filters_select_the_right_companies(q, orgs):
+    assert found(q) == orgs
+
+
+@needs_node
+@pytest.mark.parametrize("q, term", [
+    ("companies with good reviews", "reviews"),
+    ("high website traffic", "traffic"),
+    ("good glassdoor scores", "glassdoor"),
+    ("positive customer sentiment", "sentiment"),
+    ("most followers", "followers"),
+    ("best companies in Oslo", "best"),
+])
+def test_asks_for_data_the_agent_does_not_collect_are_refused_with_a_reason(q, term):
+    refused = explorer_js("return SP_NL.parseQuery(input.q, input.ctx).unsupported;", q=q, ctx=CTX)
+    assert [item["term"] for item in refused] == [term] and all(item["reason"] for item in refused)
+
+
+@needs_node
+def test_a_refused_search_shows_no_companies_until_the_unsupported_part_is_dropped():
+    assert found("profitable companies with good reviews") == []
+    assert explorer_js("return SP_NL.withoutUnsupported(input.q, input.ctx);", q="profitable companies with good reviews", ctx=CTX) == "profitable companies"
+
+
+@needs_node
+def test_every_example_search_finds_companies_in_the_published_sample():
+    from norway_company_agent.site import row
+
+    rows = [row(json.loads(line)) for line in SMOKE_ENVELOPES.read_text(encoding="utf-8").splitlines() if line.strip()]
+    counts = explorer_js("const ctx = SP_NL.contextFor(input.rows); return SP_NL.EXAMPLES.map(q => [q, SP_NL.select(input.rows, SP_NL.parseQuery(q, ctx)).length]);", rows=rows)
+    assert len(counts) >= 3 and all(n > 0 for _, n in counts), counts
+
+
+@needs_node
+@pytest.mark.parametrize("q, topics", [
+    ("Who runs it?", ["people"]),
+    ("Is it profitable?", ["finances"]),
+    ("Where is it based?", ["places"]),
+    ("Is it hiring?", ["hiring"]),
+    ("Does it have a website?", ["web"]),
+    ("What changed since the last run?", ["changes"]),
+    ("Who owns it?", ["group"]),
+    ("What does it do?", ["business"]),
+    ("Revenue and who is the CEO?", ["finances", "people"]),
+])
+def test_questions_are_routed_to_the_matching_part_of_the_profile(q, topics):
+    assert explorer_js("return SP_NL.routeQuestion(input.q).topics;", q=q) == topics
+
+
+@needs_node
+def test_an_answer_reuses_the_cited_summary_sentences_for_its_topic():
+    answer = ask(smoke_envelope("968442929"), "Who runs it?")
+    assert [topic["id"] for topic in answer["topics"]] == ["people"]
+    assert any("Daglig leder: Hanne Valen-Sendstad" in s["text"] and s["claim_ids"] for s in answer["topics"][0]["sentences"])
+    assert answer["unknown"] == [] and answer["unsupported"] == [] and answer["empty"] is False
+
+
+@needs_node
+def test_an_answer_says_what_is_not_known_and_why():
+    answer = ask(smoke_envelope("926532812"), "Is it hiring?")
+    assert answer["topics"] == []
+    assert answer["unknown"] == [{"family": "jobs", "label": "Jobs", "state": "not_available",
+                                  "reason": "no active NAV job ads with this organisation number in the checked window"}]
+
+
+@needs_node
+def test_a_question_about_data_the_agent_does_not_collect_is_refused():
+    answer = ask(smoke_envelope("968442929"), "What do customers think of them?")
+    assert [item["term"] for item in answer["unsupported"]] == ["customers"] and answer["topics"] == []
+
+
+@needs_node
+def test_a_question_naming_a_person_finds_the_facts_that_mention_them():
+    envelope = smoke_envelope("968442929")
+    expected = [c["claim_id"] for c in envelope["claims"] if isinstance(c["value"], dict) and c["value"].get("name") == "Vimal Kumar Badhwar"]
+    answer = ask(envelope, "Is Vimal Kumar Badhwar involved?")
+    assert expected and answer["matches"] == expected
+
+
+@needs_node
+def test_an_unmatched_question_says_so_instead_of_guessing():
+    answer = ask(smoke_envelope("968442929"), "zxqv blorp")
+    assert answer["empty"] is True and answer["topics"] == [] and answer["matches"] == [] and answer["unknown"] == []
+
+
+def test_site_index_row_carries_profile_platforms_previous_revenue_and_founding_year():
+    from norway_company_agent.site import row
+
+    p = chain_profile("https://www.aas.no/")
+    p["evidence"]["registry_live"]["value"]["founded_date"] = "2005-08-09"
+    p["evidence"]["financials"]["value"]["records"].append({"period": {"fraDato": "2024-01-01", "tilDato": "2024-12-31"}, "currency": "NOK",
+                                                            "account_type": "SELSKAP", "revenue": 1300000.0, "annual_result": None, "assets": 0.0})
+    index_row = row(apply_refresh(None, build_envelope(p, run=RUN)))
+    assert (index_row["sp"], index_row["r"], index_row["r0"], index_row["fy"]) == (["facebook"], 1425713.0, 1300000.0, 2005)
+
+
+@needs_node
+def test_overlapping_refusals_in_a_question_name_only_the_specific_one():
+    assert [item["term"] for item in explorer_js("return SP_NL.routeQuestion(input.q).unsupported;", q="Any customer reviews?")] == ["reviews"]
+
+
+@needs_node
+def test_a_search_of_only_filler_words_lists_every_company():
+    assert found("show me all companies") == ["111111111", "222222222", "333333333"]

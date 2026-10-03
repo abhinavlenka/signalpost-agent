@@ -15,12 +15,14 @@ from typing import Any, Iterable
 TEMPLATE = Path(__file__).resolve().parent / "site_template.html"
 
 
-def amount(claims: list[dict], field: str):
+def amount(claims: list[dict], field: str, back: int = 0):
+    """The amount for an accounts field in the latest reporting period, or `back` periods before it."""
     values = [claim for claim in claims if claim.get("family") == "annual_accounts" and claim.get("field") == field and not claim.get("stale")]
-    if not values:
+    periods = sorted({claim.get("reporting_period") or "" for claim in values}, reverse=True)
+    if len(periods) <= back:
         return None
-    latest = max(values, key=lambda claim: claim.get("reporting_period") or "")
-    return (latest.get("value") or {}).get("amount")
+    chosen = next(claim for claim in values if (claim.get("reporting_period") or "") == periods[back])
+    return (chosen.get("value") or {}).get("amount")
 
 
 def row(envelope: dict) -> dict:
@@ -30,6 +32,7 @@ def row(envelope: dict) -> dict:
     live = [claim for claim in claims if not claim.get("stale")]
     leaders = [claim["value"].get("name") for code in ("DAGL", "LEDE") for claim in live
                if claim.get("family") == "leadership" and isinstance(claim.get("value"), dict) and claim["value"].get("role_code") == code]
+    founded = str(by("legal_identity", "founded_date") or "")
     return {
         "o": envelope["organisation_number"],
         "n": envelope.get("legal_name") or by("legal_identity", "legal_name"),
@@ -38,11 +41,14 @@ def row(envelope: dict) -> dict:
         "i": (industry or {}).get("beskrivelse") if isinstance(industry, dict) else None,
         "e": by("legal_identity", "registered_employees"),
         "r": amount(claims, "revenue"),
+        "r0": amount(claims, "revenue", back=1),
         "p": amount(claims, "annual_result"),
+        "fy": int(founded[:4]) if founded[:4].isdigit() else None,
         "w": by("official_website", "official_website"),
         "j": sum(1 for claim in claims if claim.get("field") == "open_job" and not claim.get("stale")),
         "l": [name for name in leaders if name],
         "x": sum(1 for claim in live if claim.get("family") == "company_profiles"),
+        "sp": sorted({claim["field"] for claim in live if claim.get("family") == "company_profiles"}),
         "y": sum(1 for claim in live if claim.get("field") == "website_news"),
         "c": len(envelope.get("changes") or []),
         "s": envelope.get("state"),

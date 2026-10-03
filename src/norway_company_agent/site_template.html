@@ -98,6 +98,7 @@ thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; co
 thead th.num { text-align: right; }
 th button.sortbtn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 24px; }
 th button.sortbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+th button.sortbtn:disabled { cursor: default; }
 th[aria-sort="ascending"] .sortbtn::after { content: "▲"; font-size: 9px; } th[aria-sort="descending"] .sortbtn::after { content: "▼"; font-size: 9px; }
 th[aria-sort] { color: var(--text); }
 table.list tbody tr { cursor: pointer; transition: background-color .15s; } table.list tbody tr:hover { background: var(--raised); }
@@ -151,7 +152,7 @@ h2 { font-size: 15px; margin: 0 0 var(--s3); }
 .claims td.perma a:hover { background: var(--raised); color: var(--accent); text-decoration: none; }
 .claims.collapsed tr.extra { display: none; }
 .claim-row { scroll-margin-top: 140px; }
-.claim-row.flash { background: var(--warn-soft); box-shadow: inset 3px 0 0 var(--warn); }
+.claim-row.flash { background: var(--warn-soft); box-shadow: inset 0 0 0 1px var(--warn); }
 .ev { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
 .ev > span + span::before { content: " · "; }
 .ev code, code { font-family: var(--mono); font-size: 12px; }
@@ -178,6 +179,53 @@ table.cmp .top { font-weight: 700; }
 .compare-bar .btn { border-color: transparent; background: transparent; color: inherit; }
 .compare-bar .btn:hover { background: rgba(127,127,127,.25); }
 .compare-bar .btn.primary { background: var(--accent); color: var(--on-accent); }
+
+/* plain-English search: example asks, how a query was read, and refusals */
+.nl { display: grid; gap: var(--s2); margin-bottom: var(--s3); }
+.lead { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.examples, .readas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.exlist, .qchips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; padding: 0; list-style: none; min-width: 0; }
+.btn.ex, .btn.sugg { min-height: 32px; padding: 0 12px; border-radius: 999px; border-style: dashed; color: var(--muted); font-size: 13px; white-space: normal; text-align: left; }
+.btn.ex:hover, .btn.sugg:hover { color: var(--text); border-style: solid; }
+.qchip { display: inline-flex; align-items: center; gap: 2px; min-height: 32px; max-width: 100%; padding: 0 3px 0 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; }
+.qchip > span { overflow-wrap: anywhere; }
+.qchip.text { background: var(--raised); color: var(--text); font-weight: 500; }
+.qx { all: unset; box-sizing: border-box; cursor: pointer; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; color: inherit; flex: none; transition: background-color .15s; }
+.qx:hover, .qx:active { background: rgba(127,127,127,.22); }
+.qx:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.meta:focus { outline: none; }
+.refuse { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); padding: var(--s4); border-radius: var(--radius); background: var(--warn-soft); color: var(--text); }
+.refuse-i { display: inline-flex; color: var(--warn); padding-top: 1px; }
+.refuse-t { margin: 0 0 var(--s1); font-weight: 650; }
+.refuse ul { margin: 0 0 var(--s3); padding-left: 18px; font-size: 14px; display: grid; gap: 4px; max-width: 75ch; }
+/* "Ask about this company": answers assembled from the page's own cited facts */
+.ask { margin-top: var(--s4); padding: var(--s4); }
+.ask-l { display: block; font-weight: 650; margin-bottom: var(--s2); }
+.ask-row { display: flex; gap: var(--s2); }
+.ask-row input { flex: 1 1 auto; min-width: 0; min-height: var(--tap); padding: 7px 12px; border: 1px solid var(--control); border-radius: 8px; background: var(--bg); font-size: 16px; }
+.ask-help { margin: var(--s2) 0 0; }
+.ask-help.err { color: var(--bad); }
+.ask-sugg { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.answer { margin-top: var(--s4); padding-top: var(--s4); border-top: 1px solid var(--line); scroll-margin-top: 120px; }
+.answer:focus { outline: none; }
+.ans-head { display: flex; align-items: flex-start; gap: var(--s2) var(--s3); }
+.ans-head h2 { margin: 0; }
+.ans-q { margin: 0; padding-top: 1px; color: var(--muted); font-size: 14px; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ans-block { margin-top: var(--s4); }
+.ans-block h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin: 0 0 6px; }
+.ans-block p { margin: 0 0 var(--s2); max-width: 75ch; }
+.ans-facts, .ans-list { margin: 0 0 var(--s2); padding-left: 18px; display: grid; gap: 6px; font-size: 14px; max-width: 75ch; }
+.ans-k { color: var(--muted); }
+.ans-ev { font-size: 12.5px; }
+.ans-none { margin: var(--s3) 0 0; }
+.linkbtn { all: unset; cursor: pointer; color: var(--accent); font-size: 13px; min-height: 24px; display: inline-flex; align-items: center; }
+.linkbtn:hover { text-decoration: underline; }
+.linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.section-chg { scroll-margin-top: 120px; }
+::selection { background: var(--accent-soft); color: var(--text); }
+input { caret-color: var(--accent); }
+::placeholder { color: var(--muted); opacity: 1; }
+@media (pointer: coarse) { .btn.ex, .btn.sugg, .qchip { min-height: var(--tap); } .qx { width: var(--tap); height: var(--tap); } .linkbtn { min-height: var(--tap); } }
 
 @media (max-width: 1040px) { .chips { flex-basis: 100%; } table.list .hide-t { display: none; } .dots { gap: 2px; } .dot { width: 8px; height: 8px; } .cov { gap: 6px; } }
 @media (max-width: 768px) {
@@ -208,9 +256,11 @@ table.cmp .top { font-weight: 700; }
   .detail h1 { font-size: 21px; }
   table.cmp th, table.cmp td { min-width: 130px; }
   table.cmp tbody th { min-width: 96px; width: 96px; }
+  .exlist .ex:nth-child(n+3) { display: none; }
+  .ask { padding: var(--s3); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
-@media print { header, .compare-bar, .toolbar, .jump, .actions, .perma { display: none !important; } .card { box-shadow: none; } .claims.collapsed tr.extra { display: table-row; } }
+@media print { header, .compare-bar, .toolbar, .jump, .actions, .perma, .nl, .ask { display: none !important; } .card { box-shadow: none; } .claims.collapsed tr.extra { display: table-row; } }
 </style>
 </head>
 <body>
@@ -219,8 +269,8 @@ table.cmp .top { font-weight: 700; }
   <div class="bar">
     <a class="brand" href="#/" aria-label="Signalpost explorer, all companies">Signalpost <span>explorer</span></a>
     <div class="search" role="search">
-      <label class="sr-only" for="q">Search companies</label>
-      <input id="q" type="search" placeholder="Search name, org number, place, industry, leader…" autocomplete="off" spellcheck="false" aria-keyshortcuts="/">
+      <label class="sr-only" for="q">Search companies by name, or describe them in plain English</label>
+      <input id="q" type="search" placeholder="Search, or describe: profitable in Oslo" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-keyshortcuts="/">
     </div>
     <button class="btn icon" id="theme" aria-label="Switch between light and dark theme"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
   </div>
@@ -228,8 +278,295 @@ table.cmp .top { font-weight: 700; }
 <main id="app" tabindex="-1"><div class="empty">Loading…</div></main>
 <div class="sr-only" id="live" role="status" aria-atomic="true"></div>
 <div class="compare-bar" id="cbar" role="region" aria-label="Compare selection"><span id="ctext"></span><button class="btn" id="cclear">Clear</button><button class="btn primary" id="cgo">Compare</button></div>
+<script id="sp-nl">
+// Plain-English search and questions about one company. Pure functions with no page access, so the tests run them outside the browser.
+// Nothing here is generated: a search becomes filters over the list, and an answer is assembled from the profile's own cited facts.
+(function (root) {
+  "use strict";
+  const FAMILIES = {legal_identity: "Legal identity", public_brand: "Public brand", group_relationships: "Group", annual_accounts: "Accounts", filing_history: "Filings", leadership: "Leadership", registered_workplaces: "Workplaces", official_website: "Website", company_profiles: "Profiles", jobs: "Jobs", dated_activity: "Activity"};
+  const STOP = new Set(("show me find list give get all any the a an of and or plus with without that which who whose what are is be been having have has in i on at for to from by " +
+    "companies company firms firm businesses business entities entity organisations organizations please their its it they them there").split(" "));
+  const DESCRIBES = /\b(?:companies|company|firms|businesses|entities)\b/;
+  const LETTER = /[a-z0-9æøåäöüé]/;
+
+  // ---------- amounts, comparisons, labels
+  const UNIT = "(thousand|tusen|k|millioner|millions|million|mill|mnok|mn|m|milliarder|milliard|billions|billion|bn|b|mrd)";
+  const UNITS = [[/^(?:thousand|tusen|k)$/, 1e3], [/^(?:millioner|millions?|mill|mnok|mn|m)$/, 1e6], [/^(?:milliarder|milliard|billions?|bn|b|mrd)$/, 1e9]];
+  const AMOUNT = `(?:nok\\s*|kr\\.?\\s*)?(\\d+(?:[.,]\\d+)?)\\s*${UNIT}?(?:\\s*(?:nok|kr))?(?![a-z0-9æøå])`;
+  const CMP = "(more than|greater than|over|above|exceeding|at least|no less than|minimum of|fewer than|less than|under|below|at most|no more than|up to|maximum of)";
+  const amountOf = (num, unit) => parseFloat(String(num).replace(",", ".")) * ((UNITS.find(([re]) => re.test(unit || "")) || [0, 1])[1]);
+  const opOf = w => /^(?:more than|greater than|over|above|exceeding|>)$/.test(w) ? ">" : /^(?:at least|no less than|minimum of|>=)$/.test(w) ? ">=" : /^(?:fewer than|less than|under|below|<)$/.test(w) ? "<" : "<=";
+  const compare = {">": (a, b) => a > b, ">=": (a, b) => a >= b, "<": (a, b) => a < b, "<=": (a, b) => a <= b};
+  const COUNT_SAY = {">": "more than", ">=": "at least", "<": "fewer than", "<=": "at most"};
+  const AMOUNT_SAY = {">": "over", ">=": "at least", "<": "under", "<=": "at most"};
+  const nok = v => { const a = Math.abs(v), f = (x, s) => `${+x.toFixed(1)} ${s}`; return a >= 1e9 ? f(v / 1e9, "bn") : a >= 1e6 ? f(v / 1e6, "m") : a >= 1e3 ? f(v / 1e3, "k") : String(Math.round(v)); };
+  const known = v => v !== null && v !== undefined && v !== "";
+  const titleCase = s => String(s).split(/(\s+|-)/).map(w => /^[\s-]*$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join("");
+  const escapeRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const THIS_YEAR = new Date().getFullYear();
+
+  // ---------- search: phrases that become filters over the company list
+  const PLATFORMS = {linkedin: "LinkedIn", facebook: "Facebook", instagram: "Instagram", youtube: "YouTube", twitter: "X (Twitter)", tiktok: "TikTok"};
+  const SECTORS = [
+    ["construction", "construction|building|builders|contractors|bygg|entreprenør(?:er)?", /bygg|oppføring av bygninger|anlegg|grunnarbeid|elektrisk installasjon|rørlegg|snekker|maling|tømrer/],
+    ["real estate", "real estate|property|properties|eiendom", /eiendom|borettslag|boligsameie|sameie/],
+    ["software", "software|tech|technology|programvare", /programvare|datateknologi|informasjonsteknologi|programmering|databehandling|nettsted/],
+    ["consulting", "consulting|consultancy|consultants|konsulent", /konsulent|rådgiv/],
+    ["retail", "retail|shops|stores|butikk", /detaljhandel|butikk/],
+    ["wholesale", "wholesale|wholesalers|engros", /engroshandel|agentur/],
+    ["restaurants", "restaurants?|caf(?:e|é)s?|catering|food service", /restaurant|servering|kafé|kafe|catering|kantine/],
+    ["transport", "transport|transportation|logistics|trucking|haulage|taxi", /transport|godsbil|frakt|logistikk|budtjeneste|drosje|taxi/],
+    ["health", "health|healthcare|medical|clinics?|doctors?|dentists?", /lege|helse|tannlege|fysioterap|medisin|psykolog|sykehus|klinikk/],
+    ["fishing", "fishing|fisheries|aquaculture|seafood|fish farming", /fiske|havbruk|akvakultur|fisk|skalldyr|bløtdyr|krepsdyr/],
+    ["agriculture", "agriculture|agricultural|farming|farms?|forestry", /jordbruk|husdyr|gårds|skogbruk|planteproduksjon|dyrking|korn/],
+    ["holding", "holding|investment", /holding|investering|egeninvestering|forvaltning av/],
+    ["legal", "legal|law firms?|lawyers", /juridisk|advokat/],
+    ["accounting", "accounting|accountants|auditing|auditors", /regnskap|revisjon|bokføring/],
+    ["engineering", "engineering|engineers|architects?|architecture", /ingeniør|teknisk konsulent|arkitekt/],
+    ["beauty", "beauty|hairdressers?|hair salons?|salons?", /frisør|skjønnhet|hudpleie/],
+    ["hotels", "hotels?|accommodation|hospitality", /hotell|overnatting|camping/],
+    ["education", "education|schools?|training", /undervisning|opplæring|skole|kurs/],
+    ["marketing", "marketing|advertising|agencies", /reklame|markedsføring|kommunikasjon/],
+    ["media", "media|publishing|publishers|film", /forlag|utgivelse|film|video|radio|fjernsyn/],
+    ["manufacturing", "manufacturing|manufacturers|factories|industrial", /produksjon av|industri/],
+    ["automotive", "automotive|car dealers?|cars|garages?", /motorvogn|bilverksted|bil/],
+    ["energy", "energy|power|electricity|solar", /kraft|energi|elektrisitet|solcelle/],
+    ["shipping", "shipping|maritime|ship ?owners", /sjøfart|skips|rederi|havn/],
+    ["cleaning", "cleaning", /rengjøring|vaktmester/],
+  ];
+  const FORM_WORDS = [
+    [/\b(?:public limited|publicly listed|listed|public)\s+(?:companies|company)\b|\ballmennaksjeselskap(?:er)?\b/g, ["ASA"]],
+    [/\b(?:private limited|limited)\s+(?:companies|company)\b|\baksjeselskap(?:er)?\b/g, ["AS"]],
+    [/\bsole (?:proprietorships?|traders?)\b|\benkeltpersonforetak\b/g, ["ENK"]],
+    [/\bhousing co-?operatives?\b|\bborettslag\b/g, ["BRL"]],
+    [/\bfoundations?\b|\bstiftelser?\b/g, ["STI"]],
+    [/\bassociations?\b|\bforeninger?\b/g, ["FLI"]],
+    [/\bforeign (?:branch(?:es)?|companies)\b/g, ["NUF"]],
+    [/\bco-?operatives?\b|\bsamvirke(?:foretak)?\b/g, ["SA"]],
+    [/\bpartnerships?\b/g, ["ANS", "DA"]],
+  ];
+  const TOP_KEYS = {rev: ["revenue", r => r.r], emp: ["employees", r => r.e], res: ["net result", r => r.p]};
+  const topKey = w => /^(?:employees|staff|headcount)$/.test(w) ? "emp" : /^(?:net result|result|profit)$/.test(w) ? "res" : "rev";
+  const counted = (op, n) => ({id: `emp${op}${n}`, label: `${COUNT_SAY[op]} ${n} employees`, test: r => known(r.e) && compare[op](+r.e, n)});
+  const revenue = (op, v) => ({id: `rev${op}${v}`, label: `revenue ${AMOUNT_SAY[op]} NOK ${nok(v)}`, test: r => known(r.r) && compare[op](+r.r, v)});
+
+  function rules(ctx) {
+    const codes = [...new Set(["AS", "ASA", "ENK", "NUF", "ANS", "DA", "SA", "BRL", "STI", "FLI", "ESEK", ...(ctx.forms || [])].filter(Boolean).map(String))].sort((a, b) => b.length - a.length);
+    const codeRe = codes.map(c => escapeRe(c.toLowerCase())).join("|");
+    const list = [
+      [new RegExp(`\\b(?:(?:with|and|having)\\s+)?${CMP}\\s+(\\d+)\\s+(?:registered\\s+)?(?:employees?|staff|people|workers|ansatte)\\b`, "g"), m => counted(opOf(m[1]), +m[2])],
+      [/\b(?:(?:with|and|having)\s+)?(\d+)\s*\+\s*(?:registered\s+)?(?:employees?|staff|people|workers|ansatte)\b/g, m => counted(">=", +m[1])],
+      [/\b(?:employees?|staff|headcount)\s*(>=|<=|>|<)\s*(\d+)/g, m => counted(m[1], +m[2])],
+      [/\b(?:(?:with|and|having)\s+)?between\s+(\d+)\s+and\s+(\d+)\s+(?:employees?|staff|people)\b/g, m => ({id: `emp${m[1]}-${m[2]}`, label: `${m[1]}–${m[2]} employees`, test: r => known(r.e) && +r.e >= +m[1] && +r.e <= +m[2]})],
+      [new RegExp(`\\b(?:(?:with|and|having)\\s+)?(?:an?\\s+)?(?:annual\\s+)?(?:revenue|turnover|sales|omsetning)\\s+(?:of\\s+)?${CMP}\\s+${AMOUNT}`, "g"), m => revenue(opOf(m[1]), amountOf(m[2], m[3]))],
+      [new RegExp(`\\b(?:(?:with|and|having)\\s+)?${CMP}\\s+${AMOUNT}\\s+(?:in\\s+|of\\s+)?(?:annual\\s+)?(?:revenue|turnover|sales|omsetning)\\b`, "g"), m => revenue(opOf(m[1]), amountOf(m[2], m[3]))],
+      [new RegExp(`\\b(?:revenue|turnover|sales|omsetning)\\s*(>=|<=|>|<)\\s*${AMOUNT}`, "g"), m => revenue(m[1], amountOf(m[2], m[3]))],
+      [new RegExp(`\\b(?:(?:with|and|having)\\s+)?(?:an?\\s+)?(?:net\\s+)?(?:result|profit)\\s+(?:of\\s+)?${CMP}\\s+${AMOUNT}`, "g"), m => { const op = opOf(m[1]), v = amountOf(m[2], m[3]); return {id: `res${op}${v}`, label: `net result ${AMOUNT_SAY[op]} NOK ${nok(v)}`, test: r => known(r.p) && compare[op](+r.p, v)}; }],
+      [/\b(?:(?:that are|which are|who are|are)\s+)?(?:profitable|in profit|making (?:a )?profits?|making money|(?:with|having) (?:a )?(?:positive (?:net )?result|profit)|overskudd)\b/g, () => ({id: "res>0", label: "profitable", test: r => known(r.p) && r.p > 0})],
+      [/\b(?:(?:that are|which are|who are|are)\s+)?(?:loss[- ]making|unprofitable|making (?:a )?loss(?:es)?|losing money|in the red|(?:with|having) (?:a )?(?:net )?loss(?:es)?|(?:with|having) (?:a )?negative (?:net )?result|underskudd)\b/g, () => ({id: "res<0", label: "loss-making", test: r => known(r.p) && r.p < 0})],
+      [/\b(?:(?:with|and)\s+)?(?:growing|increasing|rising)\s+(?:revenue|turnover|sales)\b|\b(?:revenue|turnover|sales)\s+(?:is\s+)?(?:growing|grew|up|increased|rising)\b|\b(?:growth|growing)\s+companies\b/g, () => ({id: "grow", label: "revenue up on the year before", test: r => known(r.r) && known(r.r0) && r.r > r.r0})],
+      [/\b(?:(?:with|and)\s+)?(?:shrinking|declining|falling|decreasing)\s+(?:revenue|turnover|sales)\b|\b(?:revenue|turnover|sales)\s+(?:is\s+)?(?:shrinking|fell|down|decreased|declining|falling)\b/g, () => ({id: "shrink", label: "revenue down on the year before", test: r => known(r.r) && known(r.r0) && r.r < r.r0})],
+      [/\b(?:without|with no|no|lacking|missing)\s+(?:an?\s+)?(?:verified\s+|official\s+|own\s+)?(?:websites?|web\s?sites?|homepages?|sites?)\b/g, () => ({id: "noweb", label: "no verified website found", test: r => !r.w})],
+      [/\b(?:with|and|or|plus|has|have|having|that have|which have|owning)\s+(?:an?\s+)?(?:verified\s+|official\s+|own\s+)?(?:websites?|web\s?sites?|homepages?|sites?|domains?)\b/g, () => ({id: "web", label: "verified website", test: r => !!r.w})],
+      [/\b(?:on|with|and|has|have|having)\s+(?:an?\s+)?(linkedin|facebook|instagram|youtube|twitter|tiktok)(?:\s+(?:pages?|profiles?|accounts?))?\b/g, m => ({id: `sp:${m[1]}`, label: `${PLATFORMS[m[1]]} profile`, test: r => (r.sp || []).includes(m[1])})],
+      [/\b(?:on|with|and|has|have|having)\s+(?:company[- ]owned\s+)?social(?:\s+media)?(?:\s+(?:profiles?|accounts?|pages?))?\b/g, () => ({id: "prof", label: "company-owned profiles", test: r => r.x > 0})],
+      [/\b(?:(?:companies|firms|businesses|that are|who are|which are|are|currently|and|or)\s+)hiring\b|\bhiring\s+(?:companies|firms|businesses|now)\b|\b(?:with|has|have|having|and)\s+(?:open\s+|active\s+)?(?:jobs?|job ads?|job openings?|vacanc(?:y|ies)|openings|positions)\b/g, () => ({id: "hire", label: "hiring signal", test: r => (r.a || {}).jobs === "available"})],
+      [/\b(?:with|and|or|plus|has|have|having|publishing|posting)\s+(?:recent\s+|any\s+)?(?:news|announcements|press releases?|blog posts?)\b/g, () => ({id: "news", label: "news on its website", test: r => r.y > 0})],
+      [/\b(?:(?:that|which)\s+)?(?:have\s+)?changed(?:\s+since\s+(?:the\s+)?(?:last|previous)\s+run)?\b|\bwith\s+changes\b/g, () => ({id: "chg", label: "changed since the last run", test: r => r.c > 0})],
+      [/\b(?:founded|established|started|incorporated|stiftet)\s+(?:(after|since|before|in)\s+)?(\d{4})\b/g, m => { const y = +m[2], w = m[1] || "in";
+        return w === "after" ? {id: `fy>${y}`, label: `founded after ${y}`, test: r => known(r.fy) && r.fy > y} : w === "since" ? {id: `fy>=${y}`, label: `founded in or after ${y}`, test: r => known(r.fy) && r.fy >= y}
+          : w === "before" ? {id: `fy<${y}`, label: `founded before ${y}`, test: r => known(r.fy) && r.fy < y} : {id: `fy=${y}`, label: `founded in ${y}`, test: r => r.fy === y}; }],
+      [/\b(?:older than|more than)\s+(\d+)\s+years?(?:\s+old)?\b/g, m => ({id: `age>${m[1]}`, label: `founded more than ${m[1]} years ago`, test: r => known(r.fy) && r.fy < THIS_YEAR - m[1]})],
+      [/\b(?:younger than|less than|under)\s+(\d+)\s+years?(?:\s+old)?\b/g, m => ({id: `age<${m[1]}`, label: `founded in the last ${m[1]} years`, test: r => known(r.fy) && r.fy >= THIS_YEAR - m[1]})],
+      [new RegExp(`\\b(?:legal form\\s+)?(${codeRe})\\s+(?:companies|company|firms|entities|businesses|organisations|organizations)\\b|\\blegal form\\s+(${codeRe})\\b`, "g"), m => { const f = (m[1] || m[2]).toUpperCase(); return {id: `f:${f}`, label: `legal form ${f}`, test: r => String(r.f || "").toUpperCase() === f}; }],
+      ...FORM_WORDS.map(([re, forms]) => [re, () => ({id: `f:${forms.join("|")}`, label: `legal form ${forms.join(" or ")}`, test: r => forms.includes(String(r.f || "").toUpperCase())})]),
+    ];
+    return list;
+  }
+  const SECTOR_RULES = SECTORS.map(([key, words, test]) => [new RegExp(`\\b(?:${words})\\s+(?:companies|company|firms|businesses|sector|industry|entities)\\b|\\b(?:in|within)\\s+(?:the\\s+)?(?:${words})(?:\\s+(?:sector|industry|business))?\\b|\\bindustry[:\\s]+(?:${words})\\b`, "g"),
+    () => ({id: `ind:${key}`, label: `industry: ${key}`, test: r => test.test(String(r.i || "").toLowerCase())})]);
+
+  // What the agent does not collect. Matched before any filter, so "with good reviews" never turns into "with" plus leftover words.
+  const UNSUPPORTED = [
+    ["glassdoor", /\b(?:(?:with|having)\s+)?(?:(?:good|high|great|best|bad)\s+)?glassdoor(?:\s+(?:scores?|ratings?|reviews?))?\b/g, "Glassdoor and other employer reviews aren't collected; their terms don't allow it."],
+    ["credit rating", /\b(?:(?:with|having)\s+)?(?:(?:good|high|low|bad)\s+)?(?:credit\s?(?:ratings?|scores?|worthiness)|creditworth(?:y|iness)|credit risk|kredittvurdering)\b/g, "Credit ratings aren't collected."],
+    ["share price", /\b(?:share|stock) prices?\b|\bmarket (?:cap(?:italisation|italization)?|value)\b|\bvaluations?\b/g, "Share prices and market values aren't collected."],
+    ["reviews", /\b(?:(?:with|having|that have)\s+)?(?:(?:good|great|bad|positive|negative|high|best|top|customer|google|online|user)\s+)*(?:reviews?|ratings?|rated|stars|trustpilot)\b/g, "Customer reviews and ratings aren't collected: no permitted review source is connected."],
+    ["sentiment", /\b(?:(?:with|having)\s+)?(?:(?:positive|negative|good|bad|public|customer|media)\s+)*(?:sentiment|reputation|perception)\b/g, "Sentiment isn't scored: there is no labelled Norwegian evaluation set, and company-owned pages are promotional."],
+    ["followers", /\b(?:(?:with|having)\s+)?(?:the\s+)?(?:(?:most|many|more|high|lots of|a lot of)\s+)?(?:social(?:\s+media)?\s+)?(?:followers|likes|engagement|buzz|subscribers)\b/g, "Social-media reach isn't measured; the agent only records links to company-owned profiles."],
+    ["traffic", /\b(?:(?:with|having)\s+)?(?:(?:high|low|most|more|lots of|a lot of)\s+)?(?:(?:website|web|site|online)\s+)?(?:traffic|visitors|visits|page\s?views)\b/g, "Website traffic isn't measured by any source the agent uses."],
+    ["salaries", /\b(?:salar(?:y|ies)|wages|pay levels?)\b/g, "Salaries aren't in the sources the agent uses."],
+    ["competitors", /\b(?:competitors?|competition|rivals?|market share)\b/g, "Competitors and market share aren't covered."],
+    ["customers", /\b(?:what\s+(?:do|does)\s+)?(?:customers?|clients?)(?:\s+(?:think|say|feel|like|rate))?\b/g, "Customer opinions and customer lists aren't in the sources the agent uses."],
+    ["owners", /\b(?:who\s+(?:owns|owned)|owners?|owned by|shareholders?|aksjonær(?:er)?)\b/g, "Shareholder registers aren't among the sources; only group links registered in Brønnøysund are shown."],
+    ["best", /\b(?:the\s+)?(?:best|worst|leading|most (?:reliable|trusted|reputable|respected)|recommended)\b/g, "There is no measure of “best” in the data. Try a figure instead, for example “top 10 by revenue”."],
+  ];
+  const MODIFIER = /\b(?:with|having|that have|good|great|bad|positive|negative|high|low|most|many|more|best|top|lots of|a lot of)\b/;
+
+  const overlaps = (taken, s, e) => taken.some(([a, b]) => s < b && a < e);
+  function scan(lq, re, taken, make, out) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(lq))) {
+      const s = m.index, e = s + m[0].length;
+      if (!m[0].length) { re.lastIndex++; continue; }
+      if (overlaps(taken, s, e)) continue;
+      const item = make(m);
+      if (!item) continue;
+      taken.push([s, e]);
+      out.push(Object.assign(item, {span: [s, e]}));
+    }
+  }
+  function tidy(s) {
+    let t = String(s).replace(/\s+/g, " ").trim();
+    const edge = /^(?:with|and|or|plus|that|which|who|having|have|has|are)\s+|\s+(?:with|and|or|plus|that|which|who|having|have|has|are)$/;
+    while (edge.test(t)) t = t.replace(edge, "").trim();
+    return t;
+  }
+  function cut(q, spans) {
+    let out = String(q);
+    [...spans].sort((a, b) => b[0] - a[0]).forEach(([s, e]) => { out = out.slice(0, s) + " " + out.slice(e); });
+    return tidy(out);
+  }
+
+  function parseQuery(q, ctx) {
+    ctx = ctx || {};
+    const raw = String(q || ""), lq = raw.toLowerCase(), taken = [];
+    const refused = [], filters = [];
+    UNSUPPORTED.forEach(([term, re, reason]) => scan(lq, re, taken, () => ({term, reason}), refused));
+    rules(ctx).forEach(([re, make]) => scan(lq, re, taken, make, filters));
+    const tops = [];
+    scan(lq, /\b(top|largest|biggest|smallest)\s+(\d+)\s+(?:companies\s+|firms\s+)?(?:by|in|on|for)\s+(revenue|turnover|sales|employees|staff|headcount|net result|result|profit)\b/g, taken,
+      m => ({n: +m[2], key: topKey(m[3]), dir: m[1] === "smallest" ? "asc" : "desc"}), tops);
+    scan(lq, /\b(top|largest|biggest|smallest)\s+(\d+)(?:\s+(?:companies|firms))?\b/g, taken, m => ({n: +m[2], key: "rev", dir: m[1] === "smallest" ? "asc" : "desc"}), tops);
+    const names = (ctx.municipalities || []).filter(Boolean).map(m => String(m).toLowerCase()).sort((a, b) => b.length - a.length);
+    const place = /\b(?:based in|located in|registered in|from|in|i)\s+/g;
+    let m;
+    while ((m = place.exec(lq))) {
+      const at = m.index + m[0].length, rest = lq.slice(at);
+      const name = names.find(n => rest.startsWith(n) && !LETTER.test(rest.charAt(n.length)));
+      if (!name || overlaps(taken, m.index, at + name.length)) continue;
+      taken.push([m.index, at + name.length]);
+      filters.push({id: `m:${name}`, label: `in ${titleCase(name)}`, test: r => String(r.m || "").toLowerCase() === name, span: [m.index, at + name.length]});
+    }
+    SECTOR_RULES.forEach(([re, make]) => scan(lq, re, taken, make, filters));
+    // A bare word such as "traffic" may be part of a company name; refuse it only when the query reads as a description.
+    const describing = filters.length > 0 || tops.length > 0 || DESCRIBES.test(lq);
+    const unsupported = refused.filter(u => describing || (u.term !== "best" && MODIFIER.test(lq.slice(u.span[0], u.span[1]))));
+    const spans = [...filters, ...unsupported, ...tops].map(x => x.span);
+    const nl = spans.length > 0;
+    const words = lq.split(/[^a-z0-9æøåäöüé-]+/).filter(Boolean);
+    const filler = words.length > 0 && words.every(w => STOP.has(w));  // "show me all companies" asks for everything
+    const text = nl ? cut(lq, spans).split(/[^a-z0-9æøåäöüé-]+/).filter(w => w && !STOP.has(w)).join(" ") : filler ? "" : raw.trim();
+    filters.sort((a, b) => a.span[0] - b.span[0]);
+    unsupported.sort((a, b) => a.span[0] - b.span[0]);
+    const top = tops[0] ? Object.assign(tops[0], {label: `${tops[0].dir === "asc" ? "smallest" : "top"} ${tops[0].n} by ${TOP_KEYS[tops[0].key][0]}`}) : null;
+    return {query: raw, filters, unsupported, top, text, nl};
+  }
+  const haystack = r => [r.n, r.o, r.m, r.i, r.w, ...(r.l || [])].map(v => String(v ?? "").toLowerCase());
+  function textMatches(r, p) {
+    if (!p.text) return true;
+    const fields = haystack(r);
+    if (!p.nl) { const q = p.text.toLowerCase(); return fields.some(v => v.includes(q)); }
+    return p.text.split(" ").every(word => fields.some(v => v.includes(word)));
+  }
+  function select(rows, p) {
+    if (p.unsupported.length) return [];
+    let list = rows.filter(r => p.filters.every(f => f.test(r)) && textMatches(r, p));
+    if (p.top) {
+      const get = TOP_KEYS[p.top.key][1], dir = p.top.dir === "asc" ? 1 : -1;
+      list = list.filter(r => known(get(r))).sort((a, b) => (get(a) - get(b)) * dir).slice(0, p.top.n);
+    }
+    return list;
+  }
+  const withoutUnsupported = (q, ctx) => { const p = parseQuery(q, ctx); return cut(String(q || ""), p.unsupported.map(u => u.span)); };
+  const withoutFilter = (q, ctx, id) => { const p = parseQuery(q, ctx), f = p.filters.find(x => x.id === id) || (p.top && id === "top" ? p.top : null); return f ? cut(String(q || ""), [f.span]) : String(q || ""); };
+  const withoutText = (q, ctx) => { const p = parseQuery(q, ctx); return tidy([...p.filters, ...(p.top ? [p.top] : [])].sort((a, b) => a.span[0] - b.span[0]).map(x => String(q).slice(x.span[0], x.span[1])).join(" ")); };
+  const contextFor = rows => ({municipalities: [...new Set(rows.map(r => r.m).filter(Boolean))], forms: [...new Set(rows.map(r => r.f).filter(Boolean))]});
+  const EXAMPLES = ["profitable companies in Oslo", "more than 5 employees with a website", "real estate companies with a loss", "top 10 by revenue"];
+
+  // ---------- questions about one company
+  const IDENTITY_FIELDS = new Set(["legal_name", "organisation_number", "legal_form", "legal_form_label", "municipality", "founded_date", "registered_date", "bankrupt", "under_liquidation", "forced_dissolution", "vat_registered", "share_capital", "previous_legal_name", "registry_declared_site"]);
+  const TOPICS = {
+    identity: {label: "Who it is", section: "legal_identity", families: [], claim: c => c.family === "legal_identity" && IDENTITY_FIELDS.has(c.field) || c.field === "previous_legal_name",
+      re: /\b(?:who is (?:it|this|the company)|what (?:kind|type) of (?:company|entity)|legal form|company type|founded|established|when was|how old|age|status|bankrupt\w*|liquidat\w*|dissol\w*|vat|mva|share capital|organi[sz]ation number|org\.? ?(?:no|nr|number)|previous names?|renamed)\b/},
+    business: {label: "What it does", section: "legal_identity", families: [], claim: c => ["industry", "stated_activity", "statutory_purpose", "self_description", "website_brand_title"].includes(c.field),
+      re: /\bwhat (?:does|do) (?:it|they|the company|this company) (?:do|sell|make|offer|produce)\b|\b(?:line of )?business\b|\bindustry\b|\bsector\b|\b(?:its |main |core |stated |registered )?activit(?:y|ies)\b|\bpurpose\b|\bproducts?\b|\bservices?\b|\bdescri(?:be|ption)\b|\babout (?:it|them|the company)\b/},
+    finances: {label: "Finances", section: "annual_accounts", families: ["annual_accounts"], claim: c => c.family === "annual_accounts" || c.family === "filing_history",
+      re: /\b(?:revenue|turnover|sales|income|profit\w*|loss(?:es)?|losing money|result|earn\w*|money|financ\w*|accounts|equity|debt|assets?|liabilit\w*|solid\w*|solven\w*|growth|grow\w*|how (?:big|large)|size|omsetning|resultat|regnskap\w*|overskudd|underskudd)\b/},
+    people: {label: "People", section: "leadership_workplaces", families: ["leadership"], claim: c => c.family === "leadership" || c.field === "registered_employees",
+      re: /\b(?:who (?:runs|leads|manages|heads|is in charge|is the (?:ceo|boss|leader|manager|director|chair\w*))|runs? it|lead(?:s|er|ers|ership)?|ceo|chief|boss|daglig leder|manag(?:er|ers|ement|ing)|directors?|chair\w*|board|styre\w*|auditor|revisor|accountant|regnskapsfører|employees?|staff|headcount|how many people|people|workers|ansatte|team|founders?|executives?|roles?)\b/},
+    places: {label: "Where it is", section: "leadership_workplaces", families: ["registered_workplaces"], claim: c => c.family === "registered_workplaces", facts: ["business_address", "postal_address"],
+      re: /\b(?:where|address\w*|located|locations?|based|offices?|workplaces?|sub-?units?|branch(?:es)?|premises|municipalit\w*|city|town|kommune|adresse|headquarters?|hq)\b/},
+    web: {label: "Website and profiles", section: "web_presence", families: ["official_website", "company_profiles"], claim: c => c.family === "official_website" || c.family === "company_profiles" || c.field === "website_scope",
+      re: /\b(?:websites?|web ?sites?|sites?|homepages?|domains?|url|online|internet|social(?: media)?|linkedin|facebook|instagram|youtube|twitter|tiktok|profiles?|nettside\w*|hjemmeside\w*)\b/},
+    hiring: {label: "Hiring", section: "hiring_activity", families: ["jobs"], claim: c => c.family === "jobs",
+      re: /\b(?:hiring|hires?|recruit\w*|jobs?|vacanc\w*|openings?|positions?|careers?|stillinger?|ledige|job ads?)\b/},
+    activity: {label: "Recent activity", section: "hiring_activity", families: ["dated_activity"], claim: c => c.family === "dated_activity",
+      re: /\b(?:news|recent(?:ly)?|latest|lately|happen\w*|announce\w*|press|updates|what'?s new|anything new|nyheter|events?|timeline)\b/},
+    changes: {label: "Changes since the previous run", section: null, families: [], claim: () => false,
+      re: /\b(?:chang\w*|differen\w*|since (?:the )?(?:last|previous) (?:run|check|time)|updated|refresh\w*|endring\w*)\b/},
+    group: {label: "Group", section: "legal_identity", families: ["group_relationships"], claim: c => c.family === "group_relationships",
+      re: /\b(?:owners?|owns|owned|parent(?: company)?|subsidiar\w*|group|konsern|mother company|holding company|shareholders?|aksjonær\w*|sister compan\w*)\b/},
+  };
+  // Claimed in this order, so "recent activity" is activity rather than business, and "website" is never just "site".
+  const CLAIM_ORDER = ["changes", "activity", "hiring", "group", "web", "finances", "people", "places", "business", "identity"];
+  const OVERVIEW = /\b(?:tell me (?:about|everything)|overview|summar(?:y|ise|ize)|everything|key facts|in short|what do (?:we|you) know)\b/;
+
+  function routeQuestion(question) {
+    const lq = String(question || "").toLowerCase(), taken = [], hits = [];
+    if (OVERVIEW.test(lq)) ["identity", "business", "finances", "people", "places", "web", "hiring"].forEach((id, i) => hits.push({id, at: i}));
+    CLAIM_ORDER.forEach(id => {
+      const re = new RegExp(TOPICS[id].re.source, "g");
+      let m;
+      while ((m = re.exec(lq))) {
+        const s = m.index, e = s + m[0].length;
+        if (overlaps(taken, s, e)) continue;
+        taken.push([s, e]);
+        if (!hits.some(h => h.id === id)) hits.push({id, at: 1000 + s});
+      }
+    });
+    const refused = [], claimed = [];
+    UNSUPPORTED.forEach(([term, re, reason]) => scan(lq, re, claimed, () => ({term, reason}), refused));
+    const unsupported = refused.filter((u, i) => refused.findIndex(x => x.term === u.term) === i);
+    const tokens = lq.split(/[^a-z0-9æøåäöüé-]+/).filter(w => w.length >= 3 && !STOP.has(w));
+    return {topics: hits.sort((a, b) => a.at - b.at).map(h => h.id), unsupported: unsupported.map(({term, reason}) => ({term, reason})), tokens};
+  }
+  const claimText = c => (c.value && typeof c.value === "object" ? Object.values(c.value).filter(v => typeof v === "string" || typeof v === "number").join(" ") : String(c.value ?? "")).toLowerCase();
+
+  function answerQuestion(env, question) {
+    const q = String(question || "").trim(), route = routeQuestion(q);
+    const live = (env.claims || []).filter(c => !c.stale), byId = Object.fromEntries(live.map(c => [c.claim_id, c]));
+    const states = {};
+    Object.values(env.sections || {}).forEach(sec => Object.entries(sec.fields || {}).forEach(([family, st]) => { states[family] = st; }));
+    const sentences = ((env.summary || {}).sentences || []);
+    const topics = [], unknown = [];
+    route.topics.forEach(id => {
+      const t = TOPICS[id];
+      if (id === "changes") {
+        const refresh = env.refresh || {};
+        topics.push({id, label: t.label, section: null, sentences: [], facts: [], notes: [], changes: env.changes || [], previous_run_id: refresh.previous_run_id || null, first_run: refresh.mode !== "diff"});
+        return;
+      }
+      const said = sentences.filter(s => (s.claim_ids || []).some(cid => byId[cid] && t.claim(byId[cid])));
+      const cited = new Set(said.flatMap(s => s.claim_ids || []));
+      let facts = live.filter(c => (t.facts || []).includes(c.field) && !cited.has(c.claim_id));
+      if (!said.length && !facts.length) facts = live.filter(c => t.claim(c)).slice(0, 6);
+      const notes = t.families.map(f => states[f]).filter(st => st && st.state === "not_applicable" && st.reason).map(st => (/^registry\b/.test(st.reason) ? "The " + st.reason : st.reason.charAt(0).toUpperCase() + st.reason.slice(1)) + ".");
+      t.families.forEach(f => { const st = states[f]; if (st && !["available", "not_applicable"].includes(st.state) && !unknown.some(u => u.family === f)) unknown.push({family: f, label: FAMILIES[f] || f, state: st.state, reason: st.reason || null}); });
+      if (said.length || facts.length || notes.length) topics.push({id, label: t.label, section: t.section, sentences: said.map(s => ({text: s.text, claim_ids: s.claim_ids || []})), facts: facts.map(c => c.claim_id), notes});
+    });
+    const matches = route.topics.length || route.unsupported.length || !route.tokens.length ? []
+      : live.filter(c => route.tokens.some(w => claimText(c).includes(w))).slice(0, 8).map(c => c.claim_id);
+    return {question: q, topics, unknown, unsupported: route.unsupported, matches, tokens: route.tokens, empty: !topics.length && !unknown.length && !route.unsupported.length && !matches.length};
+  }
+  const SUGGESTIONS = ["Who runs it?", "Is it profitable?", "Where is it based?", "Is it hiring?", "Does it have a website?", "What changed?"];
+
+  root.SP_NL = {FAMILIES, parseQuery, select, withoutUnsupported, withoutFilter, withoutText, contextFor, EXAMPLES, routeQuestion, answerQuestion, SUGGESTIONS, TOPICS};
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
 <script>
-const FAMILIES = {legal_identity:"Legal identity", public_brand:"Public brand", group_relationships:"Group", annual_accounts:"Accounts", filing_history:"Filings", leadership:"Leadership", registered_workplaces:"Workplaces", official_website:"Website", company_profiles:"Profiles", jobs:"Jobs", dated_activity:"Activity"};
+const FAMILIES = SP_NL.FAMILIES;
 const SECTION_TITLES = {legal_identity:"Legal identity and public brand", annual_accounts:"Annual accounts and history", leadership_workplaces:"Leadership and registered workplaces", web_presence:"Official website and company-owned profiles", hiring_activity:"Hiring and dated public activity"};
 const SECTION_SHORT = {legal_identity:"Identity", annual_accounts:"Accounts", leadership_workplaces:"Leadership", web_presence:"Web presence", hiring_activity:"Hiring and activity"};
 const STATE_LABEL = {available:"available", not_available:"not found", blocked:"blocked", not_applicable:"not applicable", ambiguous:"ambiguous", failed:"failed"};
@@ -239,6 +576,8 @@ const ACCOUNT_ROWS = [["revenue","Revenue"],["operating_result","Operating resul
 const FILTERS = {w:["Verified website", r => r.w], j:["Hiring signal", r => (r.a||{}).jobs === "available"], x:["Company profiles", r => r.x], y:["News", r => r.y], r:["Reports revenue", r => r.r != null], pos:["Profitable", r => r.p > 0], c:["Changed", r => r.c], pin:["Pinned", r => pins.has(r.o)]};
 const SORTS = {cov:["Coverage (most first)", r => coverage(r), "desc"], name:["Name (A–Z)", r => (r.n||"").toLowerCase(), "asc"], rev:["Revenue (highest first)", r => r.r, "desc"], res:["Net result (highest first)", r => r.p, "desc"], emp:["Employees (most first)", r => r.e, "desc"]};
 const PAGE = 100, MAX_COMPARE = 4;
+const ICON_X = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+const ICON_INFO = '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 9v5M10 6.3v.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 
 let rows = [], cache = {}, selected = new Set();
 let state = {q: "", f: new Set(), s: "cov", d: "desc", shown: PAGE, m: "", lf: "", emp: "", rev: ""};
@@ -246,7 +585,7 @@ const ADVANCED = ["m", "lf", "emp", "rev"];
 let pins = new Set();
 try { pins = new Set(JSON.parse(localStorage.getItem("sp-pins") || "[]")); } catch (e) {}
 const savePins = () => { try { localStorage.setItem("sp-pins", JSON.stringify([...pins])); } catch (e) {} };
-let lastKind = null, listScroll = 0;
+let lastKind = null, listScroll = 0, currentAsk = null;
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -310,11 +649,20 @@ function listChanged(resetPaging = true) {
   try { history.replaceState(null, "", listHash()); } catch (e) {}
   renderList();
 }
+// The search box takes a name or a plain-English description; SP_NL reads the description into filters and refuses what the data cannot answer.
+let nlCtx = null, nlMemo = {q: null, p: null};
+function nlParse() {
+  if (!nlCtx) nlCtx = SP_NL.contextFor(rows);
+  if (nlMemo.q !== state.q) nlMemo = {q: state.q, p: SP_NL.parseQuery(state.q, nlCtx)};
+  return nlMemo.p;
+}
 function filtered() {
-  const q = state.q.trim().toLowerCase();
-  const list = rows.filter(r => (!q || [r.n, r.o, r.m, r.i, r.w, ...(r.l||[])].some(v => String(v||"").toLowerCase().includes(q))) && [...state.f].every(k => FILTERS[k][1](r))
+  const nl = nlParse();
+  const base = rows.filter(r => [...state.f].every(k => FILTERS[k][1](r))
     && (!state.m || String(r.m||"").toLowerCase() === state.m.toLowerCase()) && (!state.lf || r.f === state.lf)
     && (state.emp === "" || (r.e ?? -1) >= +state.emp) && (state.rev === "" || (r.r ?? -Infinity) >= +state.rev * 1e6));
+  const list = SP_NL.select(base, nl);
+  if (nl.top) return list;  // "top 10 by revenue" keeps its own ranking
   const get = SORTS[state.s][1], dir = state.d === "asc" ? 1 : -1;
   return list.sort((a, b) => { const x = get(a), y = get(b); if (x == null || x === "") return (y == null || y === "") ? 0 : 1; if (y == null || y === "") return -1; return (x < y ? -1 : x > y ? 1 : 0) * dir || String(a.n).localeCompare(String(b.n)); });
 }
@@ -323,22 +671,41 @@ function dots(a) {
   const detail = Object.entries(FAMILIES).map(([k, label]) => `${label}: ${STATE_LABEL[(a||{})[k]] || "not checked"}`).join("\n");
   return `<span class="cov" title="${esc(detail)}"><b aria-hidden="true">${n}/${total}</b><span class="sr-only">${n} of ${total} field families available</span><span class="dots" aria-hidden="true">${Object.keys(FAMILIES).map(k => `<span class="dot ${esc((a||{})[k]||"")}"></span>`).join("")}</span></span>`;
 }
-function sortTh(key, label, cls = "") {
-  const active = state.s === key;
-  return `<th class="${cls}" ${active ? `aria-sort="${state.d === "asc" ? "ascending" : "descending"}"` : ""}><button class="sortbtn" data-sort="${key}">${label}</button></th>`;
+function sortTh(key, label, cls = "", locked = false) {
+  const active = state.s === key && !locked;
+  return `<th class="${cls}" ${active ? `aria-sort="${state.d === "asc" ? "ascending" : "descending"}"` : ""}><button class="sortbtn" data-sort="${key}" ${locked ? 'disabled title="Ranked by your search"' : ""}>${label}</button></th>`;
+}
+// How a plain-English search was read: one removable chip per condition, so a misreading is visible and one tap away from undone.
+function readAsHtml(nl) {
+  if (!nl.nl || !(nl.filters.length || nl.top)) return "";
+  const chip = (label, drop, cls = "") => `<li class="qchip ${cls}"><span>${esc(label)}</span><button type="button" class="qx" data-drop="${esc(drop)}" aria-label="Remove ${esc(label)} from the search">${ICON_X}</button></li>`;
+  return `<div class="readas"><span class="lead" id="readas-l">Read as</span><ul class="qchips" aria-labelledby="readas-l">${[...nl.filters.map(f => chip(f.label, f.id)), ...(nl.top ? [chip(nl.top.label, "top")] : []), ...(nl.text ? [chip(`matching “${nl.text}”`, "text", "text")] : [])].join("")}</ul></div>`;
+}
+function refusalHtml(nl) {
+  const rest = SP_NL.withoutUnsupported(state.q, nlCtx);
+  return `<div class="refuse" role="note"><span class="refuse-i">${ICON_INFO}</span><div><p class="refuse-t">This search can't be answered from the data</p><ul>${nl.unsupported.map(u => `<li><b>${esc(u.term.charAt(0).toUpperCase() + u.term.slice(1))}.</b> ${esc(u.reason)}</li>`).join("")}</ul><button type="button" class="btn" id="nl-drop">${rest ? `Search “${esc(rest)}” instead` : "Show all companies"}</button></div></div>`;
+}
+function setQuery(q) {
+  state.q = q; $("#q").value = q;
+  listChanged();
+  $("#meta")?.focus({preventScroll: true});
 }
 function renderList() {
-  const list = filtered(), shown = list.slice(0, state.shown);
+  const nl = nlParse(), list = filtered(), shown = list.slice(0, state.shown);
   const counts = Object.fromEntries(Object.entries(FILTERS).map(([k, [, test]]) => [k, rows.filter(test).length]));
   const advanced = [state.m && `in ${state.m}`, state.lf && `legal form ${state.lf}`, state.emp !== "" && `at least ${state.emp} employees`, state.rev !== "" && `revenue of at least NOK ${state.rev} m`].filter(Boolean);
   const active = [...[...state.f].map(k => FILTERS[k][0]), ...advanced];
+  const reading = [...nl.filters.map(f => f.label), ...(nl.top ? [nl.top.label] : [])];
   const distinct = key => [...new Set(rows.map(r => r[key]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
-  const emptyHtml = `<div class="empty"><h2>No companies match</h2><p>${state.q ? `Nothing matches “${esc(state.q)}”` : "Nothing matches"}${active.length ? ` with ${esc(active.join(", "))}` : ""}. Try a shorter name, an organisation number, or fewer filters.</p>
+  const emptyHtml = `<div class="empty"><h2>No companies match</h2><p>${nl.nl ? `No company matches all of: ${esc([...reading, ...(nl.text ? [`“${nl.text}”`] : [])].join(", "))}${active.length ? `, with ${esc(active.join(", "))}` : ""}. Remove a condition to widen the search.` : `${state.q ? `Nothing matches “${esc(state.q)}”` : "Nothing matches"}${active.length ? ` with ${esc(active.join(", "))}` : ""}. Try a shorter name, an organisation number, or fewer filters.`}</p>
     <div class="actions">${state.q ? '<button class="btn" data-clear="q">Clear search</button>' : ""}${active.length ? '<button class="btn" data-clear="f">Clear filters</button>' : ""}</div></div>`;
+  const examples = state.q ? "" : `<div class="examples"><span class="lead" id="ex-l">Try plain English</span><div class="exlist" role="group" aria-labelledby="ex-l">${SP_NL.EXAMPLES.map(x => `<button type="button" class="btn ex" data-ex="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>`;
+  const nlHtml = examples + readAsHtml(nl);
   $("#app").innerHTML = `<h1 class="sr-only">Companies</h1>
+  ${nlHtml ? `<div class="nl">${nlHtml}</div>` : ""}
   <div class="toolbar">
     <div class="chips" role="group" aria-label="Filters">${Object.entries(FILTERS).map(([k, [label]]) => `<button class="chip" data-f="${k}" aria-pressed="${state.f.has(k)}">${label} <span class="n">${counts[k]}</span></button>`).join("")}</div>
-    <div class="tools"><label class="sort">Sort <select id="sort" aria-label="Sort companies by">${Object.entries(SORTS).map(([k, [label]]) => `<option value="${k}" ${state.s === k ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    <div class="tools"><label class="sort">Sort <select id="sort" aria-label="Sort companies by" ${nl.top ? 'disabled title="Ranked by your search"' : ""}>${Object.entries(SORTS).map(([k, [label]]) => `<option value="${k}" ${(nl.top ? nl.top.key : state.s) === k ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     <button class="btn" id="csv" ${list.length ? "" : "disabled"}>Export CSV</button></div>
     <details class="adv" ${advanced.length ? "open" : ""}><summary>More filters${advanced.length ? ` (${advanced.length} active)` : ""}</summary><div class="advgrid">
       <label>Municipality<input id="f-m" list="munis" value="${esc(state.m)}" placeholder="Any" autocomplete="off"><datalist id="munis">${distinct("m").map(m => `<option value="${esc(m)}">`).join("")}</datalist></label>
@@ -347,16 +714,19 @@ function renderList() {
       <label>Revenue, at least (NOK million)<input id="f-rev" type="number" inputmode="decimal" min="0" step="any" value="${esc(state.rev)}" placeholder="Any"></label>
     </div></details>
   </div>
-  <p class="meta"><span>${list.length === rows.length ? `${rows.length} companies` : `${list.length} of ${rows.length} companies`}${active.length ? ` matching ${esc(active.join(", "))}` : ""}${selected.size ? ` · ${selected.size} selected to compare` : ""}${active.length ? ' · <button class="btn" data-clear="f" style="min-height:28px">Clear filters</button>' : ""}</span>
+  <p class="meta" id="meta" tabindex="-1"><span>${list.length === rows.length ? `${rows.length} companies` : `${list.length} of ${rows.length} companies`}${active.length ? ` matching ${esc(active.join(", "))}` : ""}${selected.size ? ` · ${selected.size} selected to compare` : ""}${active.length ? ' · <button class="btn" data-clear="f" style="min-height:28px">Clear filters</button>' : ""}</span>
     <span class="legend" aria-hidden="true">Coverage <span><span class="dot available"></span>available</span><span><span class="dot ambiguous"></span>ambiguous</span><span><span class="dot failed"></span>failed or blocked</span><span><span class="dot"></span>not found</span></span></p>
-  <div class="card">${list.length ? `<table class="list"><thead><tr><th><span class="sr-only">Compare</span></th>${sortTh("name", "Company")}<th class="hide-m hide-t">Industry</th>${sortTh("rev", "Revenue (NOK)", "num")}${sortTh("res", "Net result", "num")}${sortTh("emp", "Employees", "num hide-m")}<th class="hide-m hide-t">Signals</th>${sortTh("cov", "Coverage")}</tr></thead><tbody>
+  ${nl.unsupported.length ? refusalHtml(nl) : `<div class="card">${list.length ? `<table class="list"><thead><tr><th><span class="sr-only">Compare</span></th>${sortTh("name", "Company", "", !!nl.top)}<th class="hide-m hide-t">Industry</th>${sortTh("rev", "Revenue (NOK)", "num", !!nl.top)}${sortTh("res", "Net result", "num", !!nl.top)}${sortTh("emp", "Employees", "num hide-m", !!nl.top)}<th class="hide-m hide-t">Signals</th>${sortTh("cov", "Coverage", "", !!nl.top)}</tr></thead><tbody>
   ${shown.map(r => `<tr data-o="${esc(r.o)}"><td class="pk"><label class="pick"><input type="checkbox" class="cmp" aria-label="Select ${esc(r.n)} to compare" data-o="${esc(r.o)}" ${selected.has(r.o) ? "checked" : ""}></label></td>
     <td class="nm"><a class="name" href="#/c/${esc(r.o)}">${esc(r.n)}</a><div class="sub">${esc([r.o, r.f, r.m].filter(Boolean).join(" · "))}${pins.has(r.o) ? ' · <span class="badge">pinned</span>' : ""}</div></td>
     <td class="hide-m hide-t sub">${esc(r.i||"—")}</td><td class="num" data-l="Revenue">${money(r.r)}</td><td class="num" data-l="Result">${money(r.p)}</td><td class="num hide-m">${r.e ?? "—"}</td>
     <td class="hide-m hide-t">${[r.w && '<span class="badge available">website</span>', r.j && `<span class="badge available">${r.j} open job${r.j>1?"s":""}</span>`, r.y && `<span class="badge">${r.y} news</span>`, r.c && `<span class="badge ambiguous">${r.c} change${r.c>1?"s":""}</span>`].filter(Boolean).join(" ") || '<span class="sub">—</span>'}</td>
     <td class="dt">${dots(r.a)}</td></tr>`).join("")}
-  </tbody></table>${list.length > shown.length ? `<div class="more"><button class="btn" id="more">Show ${Math.min(PAGE, list.length - shown.length)} more (${list.length - shown.length} remaining)</button></div>` : ""}` : emptyHtml}</div>`;
+  </tbody></table>${list.length > shown.length ? `<div class="more"><button class="btn" id="more">Show ${Math.min(PAGE, list.length - shown.length)} more (${list.length - shown.length} remaining)</button></div>` : ""}` : emptyHtml}</div>`}`;
   const app = $("#app");
+  $$("[data-drop]", app).forEach(b => b.onclick = () => { const d = b.dataset.drop; setQuery(d === "text" ? SP_NL.withoutText(state.q, nlCtx) : SP_NL.withoutFilter(state.q, nlCtx, d)); });
+  $$("[data-ex]", app).forEach(b => b.onclick = () => setQuery(b.dataset.ex));
+  if ($("#nl-drop")) $("#nl-drop").onclick = () => setQuery(SP_NL.withoutUnsupported(state.q, nlCtx));
   $$("tbody tr", app).forEach(tr => tr.onclick = e => { if (e.target.closest("a, label, input")) return; location.hash = `#/c/${tr.dataset.o}`; });
   $$(".cmp", app).forEach(cb => cb.onchange = () => { if (!toggleCompare(cb.dataset.o, cb.checked)) cb.checked = false; });
   $$(".chip[data-f]", app).forEach(b => b.onclick = () => { const f = b.dataset.f; state.f.has(f) ? state.f.delete(f) : state.f.add(f); listChanged(); $(`.chip[data-f="${f}"]`)?.focus(); });
@@ -366,7 +736,8 @@ function renderList() {
   [["f-m", "m"], ["f-lf", "lf"], ["f-emp", "emp"], ["f-rev", "rev"]].forEach(([id, key]) => { $("#" + id).onchange = e => { state[key] = e.target.value.trim(); listChanged(); $("#" + id)?.focus(); }; });
   if ($("#more")) $("#more").onclick = () => { state.shown += PAGE; const y = scrollY; renderList(); scrollTo(0, y); };
   $("#csv").onclick = () => exportCsv(list);
-  say(`${list.length} of ${rows.length} companies shown`);
+  say(nl.unsupported.length ? `This search can't be answered from the data: ${nl.unsupported.map(u => u.term).join(", ")}.`
+    : `${reading.length ? `Read as ${reading.join(", ")}${nl.text ? `, matching ${nl.text}` : ""}. ` : ""}${list.length} of ${rows.length} companies shown`);
   updateBar();
 }
 // Text scraped from websites must not run as a spreadsheet formula when the CSV is opened: prefix such cells with an apostrophe.
@@ -491,6 +862,15 @@ async function renderCompany(org) {
       <button class="btn" id="pin" aria-pressed="${pinned}">${pinned ? "Pinned" : "Pin"}</button>
       <details class="menu"><summary class="btn">Export</summary><div class="pop"><button class="btn" id="x-csv">Facts with evidence (CSV)</button><button class="btn" id="x-json">Full profile (JSON)</button></div></details>
       <a class="btn" href="https://virksomhet.brreg.no/nb/oppslag/enheter/${esc(org)}" target="_blank" rel="noopener noreferrer">Open in Brønnøysund register</a></div></div>
+    <section class="card ask" aria-labelledby="ask-l">
+      <form id="askf" novalidate>
+        <label class="ask-l" id="ask-l" for="ask">Ask about this company</label>
+        <div class="ask-row"><input id="ask" type="text" enterkeyhint="go" autocomplete="off" spellcheck="false" placeholder="Who runs it? Is it hiring?" aria-describedby="ask-help"><button class="btn primary" type="submit">Ask</button></div>
+        <p class="sub ask-help" id="ask-help">Answers come only from the facts on this page, with links to their sources.</p>
+      </form>
+      <div class="ask-sugg" role="group" aria-label="Suggested questions">${SP_NL.SUGGESTIONS.map(x => `<button type="button" class="btn sugg" data-ask="${esc(x)}">${esc(x)}</button>`).join("")}</div>
+      <div id="answer"></div>
+    </section>
     <div class="tiles">
       ${tile("Revenue" + year(rev), rev ? "NOK " + money(rev.value.amount) : "—", rev)}
       ${tile("Net result" + year(res), res ? "NOK " + money(res.value.amount) : "—", res)}
@@ -503,7 +883,7 @@ async function renderCompany(org) {
     <nav class="jump" aria-label="Sections on this page">${Object.keys(env.sections||{}).map(key => `<button class="chip" data-jump="sec-${esc(key)}">${esc(SECTION_SHORT[key] || key)} <span class="n">${(bySection[key]||[]).length}</span></button>`).join("")}</nav>
     <div class="grid">
       <section class="card pad summary" aria-labelledby="h-sum"><h2 id="h-sum">Summary</h2>${summary}${s.changes_text ? `<p><strong>${esc(s.changes_text)}</strong></p>` : ""}${s.unknowns_text ? `<p class="sub">${esc(s.unknowns_text)}</p>` : ""}<p class="sub">Numbers in the text link to the evidence for that sentence.</p></section>
-      <section class="card pad" aria-labelledby="h-chg"><h2 id="h-chg">Changes since previous run</h2>${changes.length ? changes.map(ch => `<div class="change"><span class="badge ${ch.material ? "ambiguous" : ""}">${esc(human(ch.change_type))}</span> ${esc(FAMILIES[ch.family]||ch.family)}<div class="sub">${esc(JSON.stringify(ch.previous_value ?? "—")).slice(0,120)} → ${esc(JSON.stringify(ch.current_value ?? "—")).slice(0,120)}</div></div>`).join("") : `<p class="sub">${env.refresh?.mode === "diff" ? `No changes since run ${esc(env.refresh.previous_run_id || "")}.` : "First observation; there is no previous run."}</p>`}
+      <section class="card pad section-chg" id="chg" aria-labelledby="h-chg"><h2 id="h-chg">Changes since previous run</h2>${changes.length ? changes.map(ch => `<div class="change"><span class="badge ${ch.material ? "ambiguous" : ""}">${esc(human(ch.change_type))}</span> ${esc(FAMILIES[ch.family]||ch.family)}<div class="sub">${esc(JSON.stringify(ch.previous_value ?? "—")).slice(0,120)} → ${esc(JSON.stringify(ch.current_value ?? "—")).slice(0,120)}</div></div>`).join("") : `<p class="sub">${env.refresh?.mode === "diff" ? `No changes since run ${esc(env.refresh.previous_run_id || "")}.` : "First observation; there is no previous run."}</p>`}
       ${log.length > changes.length ? `<p class="sub">${log.length} changes recorded across all runs.</p>` : ""}
       <h2 style="margin-top:16px">Field states</h2><dl class="kv">${states.map(([f, st]) => `<dt>${esc(FAMILIES[f]||human(f))}</dt><dd>${badge(st.state)}${st.reason && st.state !== "available" ? `<div class="sub">${esc(st.reason)}</div>` : ""}</dd>`).join("")}</dl></section>
     </div>
@@ -522,9 +902,48 @@ async function renderCompany(org) {
     const lines = claims.map(c => { const e = evidence[(c.evidence_ids||[])[0]] || {}; return [c.claim_id, c.section, c.family, c.field, typeof c.value === "object" ? JSON.stringify(c.value) : c.value, c.reporting_period, c.effective_date, c.confidence, c.claim_span, c.span_kind, c.locator, e.final_url || e.source_url, e.source_class, e.retrieved_at, e.content_sha256, e.snapshot_path, e.rights].map(cell).join(","); });
     download(`signalpost-${org}-evidence.csv`, "\ufeff" + [cols.join(","), ...lines].join("\r\n"), "text/csv;charset=utf-8");
   };
-  $$("[data-jump]", app).forEach(b => b.onclick = () => { const el = document.getElementById(b.dataset.jump); if (el) { el.scrollIntoView({block: "start"}); $("h2", el)?.setAttribute("tabindex", "-1"); $("h2", el)?.focus({preventScroll: true}); } });
+  const jump = b => b.onclick = () => { const el = document.getElementById(b.dataset.jump); if (el) { el.scrollIntoView({block: "start"}); $("h2", el)?.setAttribute("tabindex", "-1"); $("h2", el)?.focus({preventScroll: true}); } };
+  $$("[data-jump]", app).forEach(jump);
+  const askBox = $("#ask"), help = $("#ask-help"), helpText = help.textContent;
+  const showAnswer = (q, focus) => {
+    const a = SP_NL.answerQuestion(env, q);
+    askBox.value = q; help.textContent = helpText; help.classList.remove("err");
+    $("#answer").innerHTML = answerHtml(org, env, a);
+    try { history.replaceState(null, "", `#/c/${org}?ask=${encodeURIComponent(q)}`); } catch (e) {}
+    $$("[data-jump]", $("#answer")).forEach(jump);
+    $("#ans-x").onclick = () => { $("#answer").innerHTML = ""; try { history.replaceState(null, "", `#/c/${org}`); } catch (e) {} askBox.focus(); say("Answer cleared"); };
+    if (focus) { const box = $("#ans"), top = box.getBoundingClientRect().top; box.focus({preventScroll: true}); if (top < 80 || top > innerHeight - 160) box.scrollIntoView({block: "start"}); }
+    say(answerSummary(a));
+  };
+  $("#askf").onsubmit = e => { e.preventDefault(); const q = askBox.value.trim(); if (!q) { help.textContent = "Type a question first, or pick one of the suggestions below."; help.classList.add("err"); askBox.focus(); return; } showAnswer(q, true); };
+  $$("[data-ask]", app).forEach(b => b.onclick = () => showAnswer(b.dataset.ask, true));
+  currentAsk = showAnswer;
   $$("[data-expand]", app).forEach(b => b.onclick = () => { b.closest(".section").querySelector("table.claims").classList.remove("collapsed"); b.parentElement.remove(); });
   updateBar();
+}
+// An answer is assembled from the profile's own cited sentences and facts; it says what is not known and what the data cannot answer.
+function answerHtml(org, env, a) {
+  const byId = Object.fromEntries((env.claims || []).map(c => [c.claim_id, c]));
+  const cap = s => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+  const cites = ids => ids.slice(0, 4).map((id, i) => `<a class="cite" href="#/c/${esc(org)}/${esc(id)}" aria-label="Evidence ${i + 1} for this sentence">${i + 1}</a>`).join("");
+  const fact = id => { const c = byId[id]; return c ? `<li><span class="ans-k">${esc(cap(human(c.field)))}:</span> ${fmtValue(c)} <a class="ans-ev" href="#/c/${esc(org)}/${esc(id)}">evidence</a></li>` : ""; };
+  const changed = t => t.changes.length ? `<ul class="ans-list">${t.changes.map(ch => `<li>${esc(cap(human(ch.change_type)))}: ${esc(FAMILIES[ch.family] || ch.family)}</li>`).join("")}</ul>`
+    : `<p>${t.first_run ? "This is the first observation; there is no previous run to compare with." : `Nothing changed since run ${esc(t.previous_run_id || "")}.`}</p>`;
+  const target = t => t.section ? [`sec-${t.section}`, SECTION_TITLES[t.section] || t.section] : t.id === "changes" ? ["chg", "Changes since previous run"] : null;
+  const block = (title, body) => `<div class="ans-block"><h3>${esc(title)}</h3>${body}</div>`;
+  return `<div class="answer" id="ans" tabindex="-1" aria-labelledby="ans-h">
+    <div class="ans-head"><h2 id="ans-h">Answer</h2><p class="ans-q">“${esc(a.question)}”</p><button type="button" class="qx" id="ans-x" aria-label="Clear the answer">${ICON_X}</button></div>
+    ${a.topics.map(t => { const go = target(t); return block(t.label, `${t.sentences.length ? `<p>${t.sentences.map(s => esc(s.text) + cites(s.claim_ids)).join(" ")}</p>` : ""}${t.notes.length ? `<p>${t.notes.map(esc).join(" ")}</p>` : ""}${t.changes ? changed(t) : ""}${t.facts.length ? `<ul class="ans-facts">${t.facts.map(fact).join("")}</ul>` : ""}${go ? `<button type="button" class="linkbtn" data-jump="${esc(go[0])}">Go to ${esc(go[1].toLowerCase())}</button>` : ""}`); }).join("")}
+    ${a.matches.length ? block("Facts that mention your words", `<ul class="ans-facts">${a.matches.map(fact).join("")}</ul>`) : ""}
+    ${a.unknown.length ? block("Not known", `<ul class="ans-list">${a.unknown.map(u => `<li><b>${esc(u.label)}:</b> ${esc(STATE_LABEL[u.state] || human(u.state))}${u.reason ? `. ${esc(cap(u.reason))}.` : "."}</li>`).join("")}</ul>`) : ""}
+    ${a.unsupported.length ? block("Not answered from this data", `<ul class="ans-list">${a.unsupported.map(u => `<li><b>${esc(cap(u.term))}.</b> ${esc(u.reason)}</li>`).join("")}</ul>`) : ""}
+    ${a.empty ? `<p class="ans-none">Nothing on this page matches that question. Try a suggestion above, or ask about leaders, finances, locations, the website or hiring.</p>` : ""}
+  </div>`;
+}
+function answerSummary(a) {
+  if (a.empty) return "No answer: nothing on this page matches that question.";
+  const parts = [...a.topics.map(t => t.label), ...(a.matches.length ? ["facts that mention your words"] : [])];
+  return `Answer shown${parts.length ? `: ${parts.join(", ")}` : ""}${a.unknown.length ? `; ${a.unknown.length} not known` : ""}${a.unsupported.length ? `; ${a.unsupported.length} not answered from this data` : ""}.`;
 }
 function revealClaim(id) {
   const el = document.getElementById(id);
@@ -560,7 +979,7 @@ async function renderCompare(orgs) {
   $("#app").innerHTML = `<nav class="crumbs" aria-label="Breadcrumb"><a href="${listHash()}">← All companies</a></nav>
     <h1 class="sr-only">Compare ${envs.length} companies</h1>
     <p class="meta"><span>Comparing ${envs.length} companies. Values link to their evidence; the highest figure in a row is bold.</span></p>
-    <div class="card cmp-wrap"><table class="cmp"><thead><tr><th scope="col"><span class="sr-only">Field</span></th>${envs.map(e => `<th scope="col"><div class="colhead"><a href="#/c/${esc(e.organisation_number)}">${esc(e.legal_name)}</a>${envs.length > 2 ? `<button class="x" data-remove="${esc(e.organisation_number)}" aria-label="Remove ${esc(e.legal_name)} from comparison">✕</button>` : ""}</div></th>`).join("")}</tr></thead>
+    <div class="card cmp-wrap"><table class="cmp"><thead><tr><th scope="col"><span class="sr-only">Field</span></th>${envs.map(e => `<th scope="col"><div class="colhead"><a href="#/c/${esc(e.organisation_number)}">${esc(e.legal_name)}</a>${envs.length > 2 ? `<button class="x" data-remove="${esc(e.organisation_number)}" aria-label="Remove ${esc(e.legal_name)} from comparison">${ICON_X}</button>` : ""}</div></th>`).join("")}</tr></thead>
     <tbody>${groups.map(([title, lines]) => `<tr class="group"><th colspan="${envs.length + 1}" scope="colgroup">${title}</th></tr>` + lines.map(([label, fn, numeric]) => { const cells = envs.map(fn); const max = numeric ? Math.max(...cells.map(c => c.n ?? -Infinity)) : null;
       return `<tr><th scope="row">${label}</th>${cells.map(c => { const top = numeric && envs.length > 1 && c.n != null && c.n === max && cells.filter(x => x.n === max).length === 1; return `<td class="${top ? "top" : ""}">${c.html}${top ? '<span class="sr-only"> (highest)</span>' : ""}</td>`; }).join("")}</tr>`; }).join("")).join("")}</tbody></table></div>`;
   $$("[data-remove]").forEach(b => b.onclick = () => { selected.delete(b.dataset.remove); location.hash = `#/compare/${orgs.filter(o => o !== b.dataset.remove).join(",")}`; });
@@ -575,14 +994,18 @@ async function route() {
   try {
     if ((m = h.match(/^\/c\/(\d{9})(?:\/(cl-[0-9a-f]+))?/))) {
       kind = lastKind = "company:" + m[1];
-      if (prev !== kind) await renderCompany(m[1]);
+      if (prev !== kind) { currentAsk = null; await renderCompany(m[1]); }
       if (m[2]) revealClaim(m[2]); else if (prev !== kind) scrollTo(0, 0);
+      const ask = !m[2] && new URLSearchParams(h.split("?")[1] || "").get("ask");  // a shared question link: #/c/<org>?ask=...
+      if (ask && currentAsk) currentAsk(ask, prev === kind);
     } else if ((m = h.match(/^\/compare\/([\d,]+)/))) {
+      currentAsk = null;
       kind = lastKind = "compare";
       const orgs = [...new Set(m[1].split(",").filter(o => /^\d{9}$/.test(o)))].slice(0, MAX_COMPARE);
       selected = new Set(orgs);
       await renderCompare(orgs); scrollTo(0, 0);
     } else {
+      currentAsk = null;
       readListHash(h);
       lastKind = kind;
       renderList();
