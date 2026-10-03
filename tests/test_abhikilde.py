@@ -1200,3 +1200,12 @@ def test_overlapping_refusals_in_a_question_name_only_the_specific_one():
 @needs_node
 def test_a_search_of_only_filler_words_lists_every_company():
     assert found("show me all companies") == ["111111111", "222222222", "333333333"]
+
+
+def test_run_report_never_publishes_a_machine_specific_universe_path(tmp_path):
+    from abhikilde.pipeline import load_universe_rows
+
+    inside = ROOT / "data" / "no-such-universe.jsonl.gz"
+    outside = tmp_path / "elsewhere" / "universe.jsonl.gz"
+    assert load_universe_rows(inside, [])[1]["path"] == "data/no-such-universe.jsonl.gz"
+    assert load_universe_rows(outside, [])[1]["path"] == "universe.jsonl.gz"

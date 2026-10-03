@@ -74,11 +74,19 @@ def read_input_orgs(path: str | Path) -> tuple[list[str], list[dict[str, Any]]]:
     return orgs, invalid
 
 
+def _report_path(path: Path) -> str:
+    """A path fit for a published report: relative to the repository when inside it, otherwise just the file name."""
+    try:
+        return path.resolve().relative_to(Path(__file__).resolve().parents[2]).as_posix()
+    except ValueError:
+        return path.name
+
+
 def load_universe_rows(path: Path, orgs: list[str]) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     wanted = set(orgs)
     rows: dict[str, dict[str, Any]] = {}
     if not path.exists():
-        return rows, {"path": str(path), "available": False}
+        return rows, {"path": _report_path(path), "available": False}
     digest = hashlib.sha256()
     with gzip.open(path, "rb") as handle:
         for line in handle:
@@ -87,7 +95,7 @@ def load_universe_rows(path: Path, orgs: list[str]) -> tuple[dict[str, dict[str,
                 row = json.loads(line)
                 if row.get("organisation_number") in wanted:
                     rows[row["organisation_number"]] = row
-    return rows, {"path": str(path), "available": True, "content_sha256": digest.hexdigest(), "matched": len(rows)}
+    return rows, {"path": _report_path(path), "available": True, "content_sha256": digest.hexdigest(), "matched": len(rows)}
 
 
 def load_previous(previous: str | None, state_dir: Path, orgs: list[str]) -> dict[str, dict[str, Any]]:
