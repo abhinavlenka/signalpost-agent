@@ -6,7 +6,7 @@ The agent researches each organisation number in a fixed order and publishes a f
 
 1. **Official records.** Entity record, roles, sub-units, group links and the role-update log from Brønnøysund. Annual accounts run in parallel because that service is slow.
 2. **Declared website.** The site the company itself listed in the register.
-3. **Discovered website.** In order: the site verified in the previous run, the register e-mail domain, name-derived domains, and (only with a key) search-API candidates.
+3. **Discovered website.** In order: the register e-mail domain, name-derived domains, and (only with a key) search-API candidates.
 4. **Jobs.** NAV's national job feed, matched on the employer's organisation number.
 5. **Employer-declared homepage.** A homepage stated in an exact-number NAV ad, for companies still without a site.
 

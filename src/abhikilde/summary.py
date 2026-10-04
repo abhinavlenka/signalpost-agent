@@ -214,15 +214,13 @@ def build_summary(envelope: dict[str, Any]) -> dict[str, Any]:
 
     changes = envelope.get("changes") or []
     material = [change for change in changes if change.get("material")]
-    change_text = None
-    if envelope.get("refresh", {}).get("mode") == "diff":
-        if changes:
-            kinds: dict[str, int] = {}
-            for change in changes:
-                kinds[change["change_type"]] = kinds.get(change["change_type"], 0) + 1
-            change_text = f"Since the previous run: {len(changes)} change(s) ({', '.join(f'{count}× {kind}' for kind, count in sorted(kinds.items()))}); {len(material)} material."
-        else:
-            change_text = "No changes since the previous run."
+    # The same wording on a first run and on a refresh: no changes reads the same either way.
+    change_text = "No changes recorded."
+    if changes:
+        kinds: dict[str, int] = {}
+        for change in changes:
+            kinds[change["change_type"]] = kinds.get(change["change_type"], 0) + 1
+        change_text = f"Since the previous run: {len(changes)} change(s) ({', '.join(f'{count}× {kind}' for kind, count in sorted(kinds.items()))}); {len(material)} material."
 
     availability = envelope.get("availability") or {}
     unknowns = [

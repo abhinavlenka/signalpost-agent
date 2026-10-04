@@ -653,6 +653,25 @@ def build_activity(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
                       span=quote_json(live.get("raw_text"), "sisteInnsendteAarsregnskap", str(latest)))
 
 
+_OBJECT_ADDRESS = re.compile(r" at 0x[0-9a-fA-F]+")
+
+
+def published_errors(items: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Errors as they appear in the envelope: what failed and why, in an order that does not depend on timing.
+
+    Phases run concurrently, so errors arrive in thread order. A traceback holds file paths of the
+    machine the run happened on, and an exception text can hold an object's memory address. None of
+    that describes the company; the traceback is kept for the run report instead.
+    """
+    cleaned = []
+    for item in items:
+        entry = {key: value for key, value in item.items() if key != "trace"}
+        if isinstance(entry.get("error"), str):
+            entry["error"] = _OBJECT_ADDRESS.sub("", entry["error"])
+        cleaned.append(entry)
+    return sorted(cleaned, key=lambda entry: json.dumps(entry, sort_keys=True, ensure_ascii=False, default=str))
+
+
 def build_envelope(
     profile: dict[str, Any],
     *,
@@ -689,9 +708,9 @@ def build_envelope(
         "sections": sections,
         "claims": builder.claims,
         "evidence": list(builder.evidence.values()),
-        "availability": {family: item["state"] for family, item in builder.fields.items()},
+        "availability": {family: builder.fields[family]["state"] for family in FIELD_FAMILIES},  # one fixed order for every company
         "changes": changes or [],
         "summary": summary,
-        "errors": builder.errors + list(profile.get("errors") or []),
+        "errors": published_errors(builder.errors + list(profile.get("errors") or [])),
         "operations": operations or {},
     }

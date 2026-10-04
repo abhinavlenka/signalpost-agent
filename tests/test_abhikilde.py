@@ -118,7 +118,7 @@ def test_refresh_is_idempotent_and_detects_real_changes():
     first = apply_refresh(None, build_envelope(profile(), run=RUN))
     same = apply_refresh(copy.deepcopy(first), build_envelope(profile(), run=RUN2))
     assert same["changes"] == [] and same["refresh"]["changes_detected"] == 0
-    assert all(claim["first_seen"] == RUN["started_at"] for claim in same["claims"])
+    assert set(same["run"]) == {"run_id", "started_at", "completed_at", "terminal_status"}  # the previous-run link is not written into the envelope
 
     changed = profile()
     changed["evidence"]["roles"]["value"] = {"roles": [{"name": "Kari Nordmann", "role_code": "DAGL", "role": "Daglig leder", "inactive": False}]}
@@ -1209,3 +1209,152 @@ def test_run_report_never_publishes_a_machine_specific_universe_path(tmp_path):
     outside = tmp_path / "elsewhere" / "universe.jsonl.gz"
     assert load_universe_rows(inside, [])[1]["path"] == "data/no-such-universe.jsonl.gz"
     assert load_universe_rows(outside, [])[1]["path"] == "universe.jsonl.gz"
+
+
+# -- determinism: the same source content must give the same company record ------------------------
+def _later(p, stamp):
+    """The same profile as fetched by a later run: only the retrieval times differ."""
+    p = copy.deepcopy(p)
+    for record in p["evidence"].values():
+        if record.get("retrieved_at"):
+            record["retrieved_at"] = stamp
+    return p
+
+
+def _published(p, run, previous=None):
+    envelope = apply_refresh(copy.deepcopy(previous), build_envelope(p, run=run, operations={"requests": 7, "runtime_ms": 1234 if run is RUN else 987, "third_party_cost_usd": 0.0}))
+    envelope["summary"] = build_summary(envelope)
+    return envelope
+
+
+def test_record_is_identical_on_first_run_fresh_rerun_and_refresh():
+    from abhikilde.determinism import same_serialisation, semantic_record
+
+    first = _published(profile(), RUN)
+    fresh_rerun = _published(_later(profile(), "2026-09-28T00:00:10Z"), RUN2)
+    refresh = _published(_later(profile(), "2026-09-28T00:00:10Z"), RUN2, previous=first)
+    assert semantic_record(fresh_rerun) == semantic_record(first)
+    assert semantic_record(refresh) == semantic_record(first)
+    # ... and written out identically too: a comparison of the serialised record must also see no difference
+    assert same_serialisation(semantic_record(fresh_rerun), semantic_record(first))
+    assert same_serialisation(semantic_record(refresh), semantic_record(first))
+
+
+def test_run_timestamps_and_run_ids_stay_inside_the_run_block():
+    from abhikilde.determinism import semantic_record
+
+    first = _published(profile(), RUN)
+    refresh = _published(_later(profile(), "2026-09-28T00:00:10Z"), RUN2, previous=first)
+    changed = profile()
+    changed["evidence"]["roles"]["value"] = {"roles": [{"name": "Kari Nordmann", "role_code": "DAGL", "role": "Daglig leder", "inactive": False}]}
+    with_changes = _published(changed, RUN2, previous=first)
+    for envelope in (first, refresh, with_changes):
+        text = json.dumps(semantic_record(envelope), ensure_ascii=False)
+        for run in (RUN, RUN2):
+            assert run["started_at"] not in text and run["completed_at"] not in text
+            assert f'"{run["run_id"]}"' not in text
+
+
+def test_only_contract_key_names_hold_values_that_differ_between_runs():
+    """A comparison that drops volatile values by key name must see nothing else change."""
+    from abhikilde.determinism import RUN_SCOPED_KEY_NAMES, differences
+
+    first = _published(profile(), RUN)
+    refresh = _published(_later(profile(), "2026-09-28T00:00:10Z"), RUN2, previous=first)
+    for envelope in (first, refresh):  # refresh adds no keys of its own to the run block
+        assert set(envelope["run"]) == {"run_id", "started_at", "completed_at", "terminal_status"}
+    names = {path.replace("[]", "").rsplit(".", 1)[-1] for path, _, _ in differences(first, refresh)}
+    assert names and names <= RUN_SCOPED_KEY_NAMES
+    assert RUN_SCOPED_KEY_NAMES == {"run_id", "started_at", "completed_at", "retrieved_at", "requests", "runtime_ms"}
+
+
+def test_previous_run_link_is_reported_for_the_run_not_per_company():
+    from abhikilde.pipeline import previous_run_link
+
+    assert previous_run_link({}) == {"mode": "initial", "previous_runs": []}
+    first = _published(profile(), RUN)
+    link = previous_run_link({"888567232": first, "985636230": first})
+    assert link == {"mode": "diff", "previous_runs": [{"run_id": "r1", "completed_at": RUN["completed_at"], "envelopes": 2}]}
+
+
+def test_envelope_errors_carry_no_traceback_address_or_arrival_order():
+    one = {"source": "research_discovery", "error": "ValueError: Hostname did not resolve", "trace": 'File "/tmp/eval-ab12/src/abhikilde/website.py", line 53'}
+    two = {"source": "research_accounts", "error": "RuntimeError: <urllib.request.Request object at 0x7f3a2c1d9b50> failed"}
+    built = [build_envelope(profile(errors=order), run=RUN)["errors"] for order in ([one, two], [two, one])]
+    assert built[0] == built[1]
+    assert built[0] == [{"source": "research_accounts", "error": "RuntimeError: <urllib.request.Request object> failed"},
+                        {"source": "research_discovery", "error": "ValueError: Hostname did not resolve"}]
+    assert "/tmp/" not in json.dumps(built[0])
+
+
+def test_error_tracebacks_are_kept_for_the_run_report():
+    from abhikilde.pipeline import error_traces
+
+    profiles = {"888567232": profile(errors=[{"source": "research_discovery", "error": "ValueError: x", "trace": "Traceback ..."}, {"source": "research_accounts", "error": "HTTP 503"}])}
+    assert error_traces(profiles) == [{"organisation_number": "888567232", "source": "research_discovery", "error": "ValueError: x", "trace": "Traceback ..."}]
+
+
+def test_availability_lists_the_field_families_in_one_fixed_order():
+    from abhikilde.envelope import FIELD_FAMILIES
+
+    with_group = profile()
+    with_group["evidence"]["registry_live"]["value"]["in_group"] = True
+    failed = build_envelope({"organisation_number": "123456789", "fatal_error": "boom"}, run=RUN)
+    for envelope in (build_envelope(profile(), run=RUN), build_envelope(with_group, run=RUN), failed):
+        assert list(envelope["availability"]) == list(FIELD_FAMILIES)
+
+
+def test_check_reports_a_difference_in_key_order_alone():
+    from abhikilde.determinism import same_serialisation
+
+    assert same_serialisation({"a": 1, "b": [{"x": 1, "y": 2}]}, {"a": 1, "b": [{"x": 1, "y": 2}]})
+    assert not same_serialisation({"a": 1, "b": [{"x": 1, "y": 2}]}, {"a": 1, "b": [{"y": 2, "x": 1}]})
+
+
+def test_detected_changes_are_identical_whenever_the_same_pair_is_compared():
+    from abhikilde.determinism import semantic_record
+
+    first = _published(profile(), RUN)
+    changed = profile()
+    changed["evidence"]["roles"]["value"] = {"roles": [{"name": "Kari Nordmann", "role_code": "DAGL", "role": "Daglig leder", "inactive": False}]}
+    run3 = {"run_id": "r3", "started_at": "2026-09-29T00:00:00Z", "completed_at": "2026-09-29T00:01:00Z", "terminal_status": "completed"}
+    one = _published(changed, RUN2, previous=first)
+    two = _published(_later(changed, "2026-09-29T00:00:10Z"), run3, previous=first)
+    assert len(one["changes"]) == 2
+    assert semantic_record(one) == semantic_record(two)
+    assert list(one) == list(first)  # the same top-level key order with and without changes
+
+
+def test_candidate_ads_break_ties_by_ad_id_not_by_set_order():
+    ads = [{"uuid": f"ad-{i}", "status": "ACTIVE", "business_name": f"Aas Elektronikk avd {i} AS", "modified": "2026-09-01T00:00:00Z"} for i in range(9)]
+    name_index = build_name_index(ads)
+    picked = [ad["uuid"] for ad in candidate_ads(name_index, ["Aas Elektronikk AS"], token_limit=4)]
+    assert picked == ["ad-8", "ad-7", "ad-6", "ad-5"]
+
+
+def test_partial_job_feed_note_does_not_depend_on_how_far_the_feed_was_read():
+    from abhikilde import pipeline
+
+    class PartialIndex:
+        since_days, complete, pages, error, ads = 45, False, 65, None, {}
+
+    notes = []
+    for pages in (65, 75):
+        PartialIndex.pages = pages
+        p = profile()
+        pipeline.attach_jobs(p, PartialIndex(), build_name_index([]))
+        notes.append(p["evidence"]["jobs"]["note"])
+    assert notes[0] == notes[1] and "partially read" in notes[0]
+
+
+def test_refresh_discovers_the_website_the_same_way_as_a_first_run(monkeypatch):
+    from abhikilde import pipeline
+
+    calls = []
+    monkeypatch.setattr(pipeline, "fetch_website", lambda *a, **k: pytest.fail("a previous run's URL must not change how the site is found"))
+    monkeypatch.setattr(pipeline, "discover_by_domain_guess", lambda p: calls.append("guess") or {})
+    monkeypatch.setattr(pipeline, "discover_by_search", lambda p: calls.append("search") or {})
+    p = profile()
+    p["known_website"] = {"url": "https://www.aas.no/", "source_class": "name_derived_domain", "discovery": "name_derived_domain"}
+    pipeline.research_discovery(p)
+    assert calls == ["guess", "search"]

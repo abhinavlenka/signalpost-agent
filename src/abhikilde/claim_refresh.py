@@ -1,7 +1,7 @@
 """Claim-level refresh: stable keys, typed changes, carried-forward evidence, idempotent reruns.
 
 Given the previous terminal envelope and the freshly built one:
-- a claim key present in both with the same value hash is unchanged (first_seen is preserved);
+- a claim key present in both with the same value hash is unchanged;
 - a new key is an addition, typed by family (``new_job``, ``new_role``, ``new_filing`` ...);
 - a missing key is a removal only when the family's source was checked successfully this run;
   when the source failed or was blocked, the previous claim is carried forward as ``stale`` and no
@@ -9,6 +9,12 @@ Given the previous terminal envelope and the freshly built one:
 - a changed value emits ``changed_<field>`` with both values and evidence for both sides.
 Change ids hash (claim key, type, old value, new value), so replaying the same snapshots can never
 create duplicate or phantom changes.
+
+Nothing written here depends on when the run happened or what it was called: the same pair of
+snapshots always gives the same claims, changes and counts, and a first run with nothing to compare
+against gives the same record as a refresh that found nothing changed. What a run was compared
+against (previous run id and time, initial or diff) is a fact about the run, not about the company:
+it is written once to the run report (``pipeline.previous_run_link``), never into an envelope.
 """
 from __future__ import annotations
 
@@ -59,19 +65,11 @@ def _material(claim: dict[str, Any], change_type: str) -> bool:
 
 
 def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
-    run = current.get("run") or {}
-    now = run.get("started_at")
     if not previous:
-        for claim in current["claims"]:
-            claim["first_seen"] = now
-            claim["last_seen"] = now
-        current["refresh"] = {
-            "previous_run_id": None,
-            "mode": "initial",
-            "changes_detected": 0,
-            "carried_forward_claims": 0,
-        }
+        # Same keys, in the same order, as the diff below writes them.
+        current["changes"] = []
         current["change_log"] = []
+        current["refresh"] = {"changes_detected": 0, "material_changes": 0, "carried_forward_claims": 0, "backfilled_claims": 0}
         return current
 
     prev_claims = {claim["claim_key"]: claim for claim in previous.get("claims") or []}
@@ -87,14 +85,12 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
     def keep_previous_evidence(evidence_ids: list[str]) -> None:
         for evidence_id in evidence_ids:
             if evidence_id in prev_evidence and evidence_id not in curr_evidence_ids:
-                current["evidence"].append({**prev_evidence[evidence_id], "id": evidence_id, "from_previous_run": previous.get("run", {}).get("run_id")})
+                current["evidence"].append({**prev_evidence[evidence_id], "id": evidence_id, "from_previous_run": True})
                 curr_evidence_ids.add(evidence_id)
 
     for key, claim in curr_claims.items():
         before = prev_claims.get(key)
         if before is None:
-            claim["first_seen"] = now
-            claim["last_seen"] = now
             website_derived = claim["family"] in DEBOUNCED_FAMILIES or claim["field"] in DEBOUNCED_FIELDS
             if previous_availability.get(claim["family"]) in {None, "failed", "blocked"} or website_derived:
                 # Either the source was not checked last run, or this is a website-derived fact that
@@ -114,12 +110,9 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
                 "previous_value": None,
                 "current_value": claim["value"],
                 "material": _material(claim, change_type),
-                "detected_at": now,
                 "evidence_ids": {"previous": [], "current": claim["evidence_ids"]},
             })
             continue
-        claim["first_seen"] = before.get("first_seen") or previous.get("run", {}).get("started_at")
-        claim["last_seen"] = now
         if before.get("value_hash") != claim.get("value_hash"):
             change_type = f"changed_{claim['field']}"
             keep_previous_evidence(before.get("evidence_ids") or [])
@@ -132,7 +125,6 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
                 "previous_value": before.get("value"),
                 "current_value": claim["value"],
                 "material": _material(claim, change_type),
-                "detected_at": now,
                 "evidence_ids": {"previous": before.get("evidence_ids") or [], "current": claim["evidence_ids"]},
             })
 
@@ -148,7 +140,7 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
             # Keep the last supported value; expose it as not re-verified in this run.
             carried += 1
             marker = {"historical": True} if family in NON_REMOVABLE and source_checked else {"stale": True}
-            carried_claim = {**before, **marker, "last_verified_run_id": before.get("last_verified_run_id") or previous.get("run", {}).get("run_id")}
+            carried_claim = {**before, **marker}
             current["claims"].append(carried_claim)
             keep_previous_evidence(before.get("evidence_ids") or [])
             continue
@@ -163,20 +155,17 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
             "previous_value": {"title": before["value"].get("title")} if family == "jobs" and isinstance(before.get("value"), dict) else before.get("value"),
             "current_value": None,
             "material": _material(before, change_type),
-            "detected_at": now,
             "evidence_ids": {"previous": before.get("evidence_ids") or [], "current": []},
         })
 
-    # Change log = previous log + new changes, deduplicated by deterministic change id.
+    # Change log = previous log, oldest first, then this run's changes; deduplicated by deterministic change id.
+    changes.sort(key=lambda item: item["change_id"])
     log = {item["change_id"]: item for item in previous.get("change_log") or []}
     for change in changes:
         log.setdefault(change["change_id"], change)
     current["changes"] = changes
-    current["change_log"] = sorted(log.values(), key=lambda item: (str(item.get("detected_at")), item["change_id"]))
+    current["change_log"] = list(log.values())
     current["refresh"] = {
-        "previous_run_id": previous.get("run", {}).get("run_id"),
-        "previous_completed_at": previous.get("run", {}).get("completed_at"),
-        "mode": "diff",
         "changes_detected": len(changes),
         "material_changes": sum(1 for change in changes if change["material"]),
         "carried_forward_claims": carried,

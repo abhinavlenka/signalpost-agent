@@ -120,6 +120,25 @@ def load_previous(previous: str | None, state_dir: Path, orgs: list[str]) -> dic
     return found
 
 
+def previous_run_link(previous_envelopes: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """What this run was compared against. A fact about the run, so it goes in the run report only."""
+    runs: dict[str, dict[str, Any]] = {}
+    for envelope in previous_envelopes.values():
+        run = envelope.get("run") or {}
+        entry = runs.setdefault(str(run.get("run_id")), {"run_id": run.get("run_id"), "completed_at": run.get("completed_at"), "envelopes": 0})
+        entry["envelopes"] += 1
+    return {"mode": "diff" if previous_envelopes else "initial", "previous_runs": sorted(runs.values(), key=lambda item: str(item["run_id"]))}
+
+
+def error_traces(profiles: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Tracebacks of failed steps, for debugging a run. They name local file paths, so they stay out of the envelopes."""
+    return [
+        {"organisation_number": org, "source": item.get("source"), "error": item.get("error"), "trace": item["trace"]}
+        for org, profile in sorted(profiles.items())
+        for item in profile.get("errors") or [] if item.get("trace")
+    ]
+
+
 # -- per-company research ------------------------------------------------------------------------
 def base_profile(org: str, row: dict[str, Any] | None, universe_meta: dict[str, Any]) -> dict[str, Any]:
     row = row or {}
@@ -486,15 +505,6 @@ def discover_by_search(profile: dict[str, Any], *, search: Callable[[str, str], 
     return {"query": query, "results": len(results), "tried": tried}
 
 
-def previous_website(envelope: dict[str, Any]) -> dict[str, Any] | None:
-    evidence_by_id = {item["evidence_id"]: item for item in envelope.get("evidence") or []}
-    for claim in envelope.get("claims") or []:
-        if claim.get("field") == "official_website" and claim.get("value"):
-            source = evidence_by_id.get((claim.get("evidence_ids") or [None])[0]) or {}
-            return {"url": claim["value"], "source_class": source.get("source_class"), "discovery": source.get("source_class")}
-    return None
-
-
 def research_registry_website(profile: dict[str, Any]) -> None:
     """Phase 3: the registry-listed website through the exact-entity gate."""
     if profile.get("website"):
@@ -508,33 +518,15 @@ def research_registry_website(profile: dict[str, Any]) -> None:
 
 
 def research_discovery(profile: dict[str, Any]) -> None:
-    """Phase 4: re-verify last run's website, else e-mail-domain and name-derived discovery."""
+    """Phase 4: e-mail-domain and name-derived discovery.
+
+    A refresh finds the site exactly as a first run does. Starting from the URL the previous run
+    published would be a different route to the same site (other entry URL, other evidence), and the
+    same sources would then give a different record depending on what state happened to exist.
+    """
     website = profile["evidence"].get("website") or {}
     if ((website.get("value") or {}).get("identity_assessment") or {}).get("publishable"):
         return
-    known = profile.get("known_website")
-    if known and known.get("url"):
-        # Refresh: re-check the previously verified site at its URL instead of rediscovering it.
-        record, _ = fetch_website(known["url"], identity=registry_identity(profile), max_pages=3)
-        if record.get("status") == "available":
-            record["source_type"] = record["source_class"] = known.get("source_class") or "previously_verified_website"
-            record["value"]["registry_listed"] = known.get("source_class") in {"registry_linked_company_website", "registry_email_domain"}
-            gated = apply_website_identity_gate(profile, record)["website"]
-            value = gated.get("value") or {}
-            assessment = value.get("identity_assessment") or {}
-            markers = {marker for items in (value.get("identity_markers") or {}).values() for marker in items}
-            if assessment.get("publishable") or "organisation_number" in markers or markers & {"address", "phone"}:
-                assessment.update({"status": "exact", "publishable": True, "method": "previously_verified_recheck_v1",
-                                   "score": max(float(assessment.get("score") or 0), 0.93),
-                                   "reasons": [*assessment.get("reasons", []), f"re-verified site from previous run (markers: {sorted(markers)})"]})
-                value["social_links"] = publishable_social_links(value)
-                value["discovery_method"] = known.get("discovery") or "previously_verified"
-                profile["evidence"]["website"] = gated
-                return
-        elif record.get("status") in {"source_error", "blocked"}:
-            # Could not re-check: keep the website state failed so refresh carries the last value forward.
-            profile["evidence"]["website"] = record
-            return
     profile["domain_guess"] = discover_by_domain_guess(profile)
     website = profile["evidence"].get("website") or {}
     if not ((website.get("value") or {}).get("identity_assessment") or {}).get("publishable"):
@@ -669,7 +661,7 @@ def attach_jobs(profile: dict[str, Any], index: NavJobIndex, name_index: dict[st
     elif result["errors"]:
         status, note = "source_error", "; ".join(item["error"] for item in result["errors"][:3])
     else:
-        status, note = "source_error", f"job feed only partially read ({index.pages} pages): absence of ads is not established"
+        status, note = "source_error", "job feed only partially read: absence of ads is not established"
     ev["jobs"] = evidence("jobs", status, "official_job_register_nav", "https://pam-stilling-feed.nav.no/api/v1/feed", value=result, note=note)
 
 
@@ -732,11 +724,8 @@ def run_batch(
         report["universe"] = universe_meta
         previous_envelopes = load_previous(previous, state, orgs)
         report["previous_envelopes"] = len(previous_envelopes)
+        report["refresh"] = previous_run_link(previous_envelopes)
         profiles = {org: base_profile(org, universe_rows.get(org), universe_meta) for org in orgs}
-        for org, previous_envelope in previous_envelopes.items():
-            known = previous_website(previous_envelope)
-            if known:
-                profiles[org]["known_website"] = known
 
         nav = NavJobIndex(since_days=nav_days).start() if use_nav else None
         ordered = [profiles[org] for org in orgs]
@@ -804,7 +793,7 @@ def run_batch(
             envelope["summary"] = build_summary(envelope)
         except Exception as exc:
             envelope = build_envelope({"organisation_number": org, "name": profile.get("name"), "fatal_error": f"envelope build failed: {type(exc).__name__}: {exc}"}, run=run_meta)
-            envelope["refresh"] = {"mode": "failed"}
+            envelope = apply_refresh(None, envelope)  # the same keys as every other envelope
         envelopes.append(envelope)
 
     # Invalid inputs still get a terminal row so nothing is silently dropped.
@@ -833,6 +822,7 @@ def run_batch(
         "third_party_cost_usd": round(_search_quota.used * search_cost, 4),
         "cost_per_company_usd": round(_search_quota.used * search_cost / max(1, len(envelopes)), 6),
         "evidence": evidence_metrics(envelopes),
+        "error_traces": error_traces(profiles),
         "validation": {
             "exact_count": len(envelopes) == len(orgs) + len(invalid),
             "unique": len({envelope["organisation_number"] for envelope in envelopes}) == len(envelopes),

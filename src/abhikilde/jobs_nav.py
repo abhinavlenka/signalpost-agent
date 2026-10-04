@@ -176,7 +176,8 @@ def candidate_ads(name_index: dict[str, Any], names: Iterable[str], *, token_lim
         for uuid in shared:
             if uuid not in exact:
                 loose[uuid] = pools[0][uuid]
-    newest = lambda ads: sorted(ads, key=lambda ad: str(ad.get("modified") or ""), reverse=True)  # noqa: E731
+    # Ties on the modified time are broken by ad id, so the selection never depends on set order.
+    newest = lambda ads: sorted(ads, key=lambda ad: (str(ad.get("modified") or ""), str(ad.get("uuid") or "")), reverse=True)  # noqa: E731
     return newest(exact.values()) + newest(loose.values())[:token_limit]
 
 
@@ -240,7 +241,7 @@ def match_company_jobs(
     return {
         "candidates": len(candidates),
         "checked": min(len(ordered), max_entries),
-        "jobs": sorted(jobs, key=lambda job: str(job.get("published") or ""), reverse=True),
+        "jobs": sorted(jobs, key=lambda job: (str(job.get("published") or ""), str(job.get("uuid") or "")), reverse=True),
         "rejected": rejected,
         "errors": errors,
         "truncated": len(ordered) > max_entries,

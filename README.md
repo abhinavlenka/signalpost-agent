@@ -19,13 +19,15 @@ uv run python -m signalpost run --input batch.txt
 | Path | Content |
 |---|---|
 | `out/envelopes.jsonl` | exactly one terminal envelope per input number |
-| `out/run-report.json` | request count by purpose, runtime, p50/p95, field-state totals, validation |
+| `out/run-report.json` | request count by purpose, runtime, p50/p95, field-state totals, validation, and what the run was compared against |
 | `out/site/index.html` | the explorer for this run; open it straight from disk, no web server needed |
 | `state/latest/<org>.json` | latest envelope per company (the previous-run input for the next refresh) |
 | `state/snapshots/<run_id>/envelopes.jsonl` | immutable per-run snapshot |
 | `state/raw/<aa>/<sha256>.gz` | the raw response behind each evidence record, stored once by content hash |
 
 Run the same command again and it refreshes: every envelope is diffed against `state/latest`. To diff against an explicit previous output, pass `--previous path/to/envelopes.jsonl`.
+
+The output is deterministic: the same source content gives the same company record on a first run, on a rerun from an empty state directory and on a refresh. Only `run`, `operations` and `evidence[].retrieved_at` describe the individual run. See [`REFRESH.md`](REFRESH.md#determinism) for the rules and the two scripts that check them.
 
 The frozen company universe (`data/signalpost-universe.jsonl.gz`, SHA-256 `1c89710e…0384`) is used as a fallback identity anchor. If the file is absent, the agent still runs from the live registry.
 
@@ -93,7 +95,7 @@ The organisation number is the anchor throughout:
 | Document | Content |
 |---|---|
 | [`DATA_SCHEMA.md`](DATA_SCHEMA.md) | envelope, claim and evidence format |
-| [`REFRESH.md`](REFRESH.md) | refresh semantics and idempotency |
+| [`REFRESH.md`](REFRESH.md) | refresh semantics, idempotency and determinism |
 | [`AGENT.md`](AGENT.md) | research order and when the agent abstains |
 | [`CRAWLERS.md`](CRAWLERS.md) | connectors, request budgets and fallback rules |
 | [`IDENTITY_RESOLUTION.md`](IDENTITY_RESOLUTION.md) | candidate and publication gates |

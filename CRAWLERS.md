@@ -23,13 +23,14 @@ Every outbound request, including redirects, retries and robots.txt, passes one 
 
 ## Fallback order for a missing website
 
-1. Re-check the site verified in the previous run.
-2. The register e-mail domain, when it is not a public mail provider.
-3. Name-derived domains (`.no` first, then `.com`), after a DNS check.
-4. Search-API candidates, only when `BRAVE_SEARCH_API_KEY` is set.
-5. A homepage declared by the employer in an exact-number NAV ad.
+The order is fixed and is the same on a first run and on a refresh:
 
-A candidate found in steps 3 to 5 is published only after the fetched site passes the gate in [`IDENTITY_RESOLUTION.md`](IDENTITY_RESOLUTION.md).
+1. The register e-mail domain, when it is not a public mail provider.
+2. Name-derived domains (`.no` first, then `.com`), after a DNS check.
+3. Search-API candidates, only when `BRAVE_SEARCH_API_KEY` is set.
+4. A homepage declared by the employer in an exact-number NAV ad.
+
+A candidate found in steps 2 to 4 is published only after the fetched site passes the gate in [`IDENTITY_RESOLUTION.md`](IDENTITY_RESOLUTION.md).
 
 ## Budget order
 

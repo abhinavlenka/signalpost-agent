@@ -60,7 +60,7 @@ class RequestBudget:
         with self._lock:
             limit = self.max_requests if essential else self.max_requests - self.reserve
             if self._used + 1 > limit:
-                raise BudgetExhausted(f"request cap reached ({self._used}/{self.max_requests})")
+                raise BudgetExhausted(f"request cap reached ({self.max_requests})")
             self._used += 1
             self._by_host[host] += 1
             self._by_purpose[purpose] += 1

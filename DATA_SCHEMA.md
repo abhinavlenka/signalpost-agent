@@ -19,15 +19,17 @@
   "claims": [ /* section 6: claim-level evidence */ ],
   "evidence": [ /* evidence records referenced by claims */ ],
   "availability": {"legal_identity": "available", "jobs": "not_available", "...": "..."},
-  "refresh": { /* section 7: refresh metadata */ },
+  "refresh": {"changes_detected": 0, "material_changes": 0, "carried_forward_claims": 0, "backfilled_claims": 0},   // section 7: counts only
   "changes": [ /* material changes since the previous run */ ],
   "change_log": [ /* all changes across runs, deduplicated by change_id */ ],
   "summary": {"text": "...", "sentences": [{"text": "...", "claim_ids": ["cl-..."], "section": "finances"}],
               "sections": [{"key": "finances", "title": "Finances", "text": "..."}], "unknowns": [...], "unknowns_text": "...", "changes_text": "..."},
-  "errors": [],
+  "errors": [],                            // {"source": "...", "error": "..."}, sorted; no tracebacks or file paths
   "operations": {"requests": 9, "runtime_ms": 8120, "third_party_cost_usd": 0}
 }
 ```
+
+Run-scoped values are confined to `run`, `operations` and `evidence[].retrieved_at`. Every other field depends only on the source content, so the same sources give the same record on every run, whether it is a first run or a refresh; see [`REFRESH.md`](REFRESH.md#determinism). What the run was compared against is in `run-report.json`, not in the envelope.
 
 ## States
 
@@ -63,7 +65,6 @@ The state always comes with a `reason`. **Absence is never converted to zero.** 
   "claim_span": "\"etternavn\" : \"Aas\" · rolle: Daglig leder (DAGL)",   // the source text the claim rests on
   "span_kind": "source_text",                     // source_text: found verbatim in the fetched source; rendered_value: written out from the parsed value
   "value_hash": "…",                              // used by refresh
-  "first_seen": "…", "last_seen": "…",
   "stale": true,        // only when carried forward because the source failed this run
   "historical": true,   // only for dated history that aged out of the source window
   "backfilled": true    // first observed after a previously failed source recovered (not a change)
@@ -88,7 +89,7 @@ The state always comes with a `reason`. **Absence is never converted to zero.** 
   "claim_span": "\"organisasjonsnummer\" : \"888567232\"",   // source text showing the record is about this entity
   "snapshot_path": "raw/5d/5d3ef6…c57a.gz",   // the stored response, relative to the state directory
   "rights": "Brønnøysund Register Centre open data, NLOD 2.0",
-  "from_previous_run": "run-id"         // evidence carried from the previous snapshot
+  "from_previous_run": true             // only on evidence carried from the previous snapshot
 }
 ```
 

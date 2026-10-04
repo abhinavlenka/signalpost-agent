@@ -18,6 +18,7 @@
 - **Dated news** comes only from structured sources on a verified site: its declared RSS/Atom feed, JSON-LD articles and `<time datetime>` elements on up to 5 pages. Dates are never guessed from free text.
   - Homepage, about, contact and careers pages are skipped even when the site marks them as articles.
   - Product or information pages that a site marks as articles can still appear as news.
+- **Pages that change on every request.** Some sites put a build time, a token or a rotating block in every response. Two live runs then store different bytes and record a different `content_sha256`, and so a different evidence id, even though every claim read from the page is the same. On frozen inputs the record is identical.
 - **Sentiment and reviews** are not produced. We found no permitted, durable source that ties them to an exact organisation number.
 
 ## Source rights

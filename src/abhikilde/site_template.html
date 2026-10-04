@@ -544,8 +544,7 @@ input { caret-color: var(--accent); }
     route.topics.forEach(id => {
       const t = TOPICS[id];
       if (id === "changes") {
-        const refresh = env.refresh || {};
-        topics.push({id, label: t.label, section: null, sentences: [], facts: [], notes: [], changes: env.changes || [], previous_run_id: refresh.previous_run_id || null, first_run: refresh.mode !== "diff"});
+        topics.push({id, label: t.label, section: null, sentences: [], facts: [], notes: [], changes: env.changes || []});
         return;
       }
       const said = sentences.filter(s => (s.claim_ids || []).some(cid => byId[cid] && t.claim(byId[cid])));
@@ -928,7 +927,7 @@ function answerHtml(org, env, a) {
   const cites = ids => ids.slice(0, 4).map((id, i) => `<a class="cite" href="#/c/${esc(org)}/${esc(id)}" aria-label="Evidence ${i + 1} for this sentence">${i + 1}</a>`).join("");
   const fact = id => { const c = byId[id]; return c ? `<li><span class="ans-k">${esc(cap(human(c.field)))}:</span> ${fmtValue(c)} <a class="ans-ev" href="#/c/${esc(org)}/${esc(id)}">evidence</a></li>` : ""; };
   const changed = t => t.changes.length ? `<ul class="ans-list">${t.changes.map(ch => `<li>${esc(cap(human(ch.change_type)))}: ${esc(FAMILIES[ch.family] || ch.family)}</li>`).join("")}</ul>`
-    : `<p>${t.first_run ? "This is the first observation; there is no previous run to compare with." : `Nothing changed since run ${esc(t.previous_run_id || "")}.`}</p>`;
+    : `<p>No changes are recorded for this company.</p>`;
   const target = t => t.section ? [`sec-${t.section}`, SECTION_TITLES[t.section] || t.section] : t.id === "changes" ? ["chg", "Changes since previous run"] : null;
   const block = (title, body) => `<div class="ans-block"><h3>${esc(title)}</h3>${body}</div>`;
   return `<div class="answer" id="ans" tabindex="-1" aria-labelledby="ans-h">
