@@ -1,7 +1,7 @@
 {
   "run_id": "smoke100-refresh",
   "agent_version": "abhikilde/1.0.0",
-  "started_at": "2026-10-03T10:18:48.516889Z",
+  "started_at": "2026-10-04T09:43:48.262902Z",
   "input": "data/batch-rehearsal-100.txt",
   "invalid_inputs": [],
   "limits": {
@@ -15,34 +15,44 @@
     "available": false
   },
   "previous_envelopes": 100,
+  "refresh": {
+    "mode": "diff",
+    "previous_runs": [
+      {
+        "run_id": "smoke100-run",
+        "completed_at": "2026-10-04T09:43:47.385831Z",
+        "envelopes": 100
+      }
+    ]
+  },
   "phases": {
     "core_registry": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 25.3,
-      "requests": 513
+      "seconds": 32.5,
+      "requests": 515
     },
     "registry_websites": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 11.3,
-      "requests": 74
+      "seconds": 13.4,
+      "requests": 75
     },
     "website_discovery": {
       "companies": 96,
       "done": 96,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 249.2,
-      "requests": 421
+      "seconds": 250.2,
+      "requests": 440
     },
     "accounts": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 15.4,
-      "requests": 384
+      "seconds": 15.8,
+      "requests": 375
     }
   },
   "accounts_retry": {
@@ -53,15 +63,15 @@
   },
   "nav": {
     "source": "nav_pam_stilling_feed",
-    "pages": 96,
-    "ads_indexed": 30140,
-    "active_ads": 9243,
+    "pages": 94,
+    "ads_indexed": 29862,
+    "active_ads": 9193,
     "complete": true,
     "error": null,
-    "started_at": "2026-10-03T10:18:48.563979Z",
-    "completed_at": "2026-10-03T10:24:19.067541Z"
+    "started_at": "2026-10-04T09:43:48.301134Z",
+    "completed_at": "2026-10-04T09:48:56.139591Z"
   },
-  "completed_at": "2026-10-03T10:24:19.192206Z",
+  "completed_at": "2026-10-04T09:48:56.239668Z",
   "expected": 100,
   "emitted_envelopes": 100,
   "envelope_states": {
@@ -71,6 +81,10 @@
     "legal_identity": {
       "available": 100
     },
+    "public_brand": {
+      "available": 40,
+      "not_available": 60
+    },
     "group_relationships": {
       "not_applicable": 94,
       "available": 6
@@ -78,33 +92,29 @@
     "annual_accounts": {
       "available": 100
     },
-    "leadership": {
+    "filing_history": {
       "available": 100
     },
-    "official_website": {
-      "available": 11,
-      "not_available": 84,
-      "ambiguous": 5
-    },
-    "jobs": {
-      "not_available": 97,
-      "available": 3
-    },
-    "public_brand": {
-      "available": 40,
-      "not_available": 60
-    },
-    "filing_history": {
+    "leadership": {
       "available": 100
     },
     "registered_workplaces": {
       "available": 83,
       "not_available": 17
     },
+    "official_website": {
+      "available": 11,
+      "not_available": 84,
+      "ambiguous": 5
+    },
     "company_profiles": {
       "available": 6,
       "not_available": 89,
       "ambiguous": 5
+    },
+    "jobs": {
+      "not_available": 97,
+      "available": 3
     },
     "dated_activity": {
       "available": 100
@@ -114,37 +124,37 @@
   "changes": 0,
   "budget": {
     "max_requests": 1900,
-    "requests_used": 1022,
-    "elapsed_seconds": 331.0,
+    "requests_used": 1035,
+    "elapsed_seconds": 308.3,
     "by_purpose": {
-      "website": 189,
-      "robots": 152,
+      "website": 195,
+      "robots": 155,
+      "brreg_locations": 101,
       "brreg_financials": 100,
       "brreg_registry_live": 100,
       "brreg_roles": 100,
-      "brreg_locations": 100,
       "brreg_role_events": 100,
-      "nav_feed": 96,
-      "website_redirect": 78,
+      "nav_feed": 94,
+      "website_redirect": 83,
       "brreg_group": 6,
       "nav_token": 1
     },
     "top_hosts": {
-      "data.brreg.no": 506,
-      "pam-stilling-feed.nav.no": 97,
+      "data.brreg.no": 507,
+      "pam-stilling-feed.nav.no": 95,
+      "www.systemhus.no": 9,
       "www.oslofjorden.org": 8,
       "www.vetalis.fr": 8,
       "heidi428.wix.com": 8,
       "plorea.com": 7,
       "vildeinga.com": 7,
+      "www.norwegianaerosolutions.no": 7,
+      "www.arendalgynekologi.no": 7,
       "www.usbl.no": 6,
       "gt-eiendom.no": 6,
-      "www.norwegianaerosolutions.no": 6,
-      "www.arendalgynekologi.no": 6,
       "www.carmel.no": 6,
       "alufence.com": 6,
-      "carmel.no": 6,
-      "www.datanova.no": 5
+      "carmel.no": 6
     }
   },
   "search": {
@@ -166,13 +176,14 @@
     "accounts_claims": 1908,
     "accounts_claims_with_reporting_period": 1908
   },
+  "error_traces": [],
   "validation": {
     "exact_count": true,
     "unique": true,
     "within_request_cap": true
   },
   "latency_ms": {
-    "p50": 8793,
-    "p95": 125940
+    "p50": 8938,
+    "p95": 125408
   }
 }

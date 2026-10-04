@@ -121,7 +121,7 @@ It is a static site (GitHub Pages ready, and it also opens from disk) with no de
 
 ## 100-company smoke test
 
-[`reports/smoke-100/`](reports/smoke-100/) holds the run report, the refresh run report and the envelopes from a clean-clone run on 100 random companies: 100 of 100 envelopes, 1,036 requests, under 6 minutes, and 0 changes on the refresh run. Every published claim has a source, retrieval time, content hash, locator, span and stored raw snapshot. A 1,000-company rehearsal returned 1,000 of 1,000 envelopes in 22 minutes with 9,830 requests. The same profiles are browsable in the explorer under [`docs/`](docs/).
+[`reports/smoke-100/`](reports/smoke-100/) holds both run reports and both runs' envelopes from a clean-clone run on 100 random companies: 100 of 100 envelopes, 1,036 requests, under 6 minutes, and 0 changes on the refresh run. The two live runs give identical records for 98 of the 100 companies; in the other two a page returned different bytes on the second fetch, so only its content hash differs. Replayed on frozen inputs, 0 of 100 differ. Every published claim has a source, retrieval time, content hash, locator, span and stored raw snapshot. A 1,000-company rehearsal returned 1,000 of 1,000 envelopes in 22 minutes with 9,830 requests. The same profiles are browsable in the explorer under [`docs/`](docs/).
 
 ## Tests
 

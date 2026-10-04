@@ -1,7 +1,7 @@
 {
   "run_id": "smoke100-run",
   "agent_version": "abhikilde/1.0.0",
-  "started_at": "2026-10-03T10:13:13.355097Z",
+  "started_at": "2026-10-04T09:38:32.191732Z",
   "input": "data/batch-rehearsal-100.txt",
   "invalid_inputs": [],
   "limits": {
@@ -15,34 +15,38 @@
     "available": false
   },
   "previous_envelopes": 0,
+  "refresh": {
+    "mode": "initial",
+    "previous_runs": []
+  },
   "phases": {
     "core_registry": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 25.7,
+      "seconds": 25.6,
       "requests": 512
     },
     "registry_websites": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 12.1,
+      "seconds": 15.4,
       "requests": 75
     },
     "website_discovery": {
       "companies": 96,
       "done": 96,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 250.2,
-      "requests": 434
+      "seconds": 251.5,
+      "requests": 441
     },
     "accounts": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 15.5,
-      "requests": 385
+      "seconds": 17.1,
+      "requests": 406
     }
   },
   "accounts_retry": {
@@ -53,15 +57,15 @@
   },
   "nav": {
     "source": "nav_pam_stilling_feed",
-    "pages": 96,
-    "ads_indexed": 30140,
-    "active_ads": 9243,
+    "pages": 94,
+    "ads_indexed": 29863,
+    "active_ads": 9193,
     "complete": true,
     "error": null,
-    "started_at": "2026-10-03T10:13:13.356836Z",
-    "completed_at": "2026-10-03T10:18:47.290963Z"
+    "started_at": "2026-10-04T09:38:32.193200Z",
+    "completed_at": "2026-10-04T09:43:47.287093Z"
   },
-  "completed_at": "2026-10-03T10:18:47.422370Z",
+  "completed_at": "2026-10-04T09:43:47.385831Z",
   "expected": 100,
   "emitted_envelopes": 100,
   "envelope_states": {
@@ -71,6 +75,10 @@
     "legal_identity": {
       "available": 100
     },
+    "public_brand": {
+      "available": 40,
+      "not_available": 60
+    },
     "group_relationships": {
       "not_applicable": 94,
       "available": 6
@@ -78,33 +86,29 @@
     "annual_accounts": {
       "available": 100
     },
-    "leadership": {
+    "filing_history": {
       "available": 100
     },
-    "official_website": {
-      "available": 11,
-      "not_available": 84,
-      "ambiguous": 5
-    },
-    "jobs": {
-      "not_available": 97,
-      "available": 3
-    },
-    "public_brand": {
-      "available": 40,
-      "not_available": 60
-    },
-    "filing_history": {
+    "leadership": {
       "available": 100
     },
     "registered_workplaces": {
       "available": 83,
       "not_available": 17
     },
+    "official_website": {
+      "available": 11,
+      "not_available": 84,
+      "ambiguous": 5
+    },
     "company_profiles": {
       "available": 6,
       "not_available": 89,
       "ambiguous": 5
+    },
+    "jobs": {
+      "not_available": 97,
+      "available": 3
     },
     "dated_activity": {
       "available": 100
@@ -115,23 +119,23 @@
   "budget": {
     "max_requests": 1900,
     "requests_used": 1036,
-    "elapsed_seconds": 334.4,
+    "elapsed_seconds": 315.4,
     "by_purpose": {
-      "website": 195,
-      "robots": 155,
+      "website": 196,
+      "robots": 156,
       "brreg_financials": 100,
       "brreg_registry_live": 100,
       "brreg_roles": 100,
       "brreg_locations": 100,
       "brreg_role_events": 100,
-      "nav_feed": 96,
+      "nav_feed": 94,
       "website_redirect": 83,
       "brreg_group": 6,
       "nav_token": 1
     },
     "top_hosts": {
       "data.brreg.no": 506,
-      "pam-stilling-feed.nav.no": 97,
+      "pam-stilling-feed.nav.no": 95,
       "www.systemhus.no": 9,
       "www.oslofjorden.org": 8,
       "www.vetalis.fr": 8,
@@ -166,13 +170,14 @@
     "accounts_claims": 1908,
     "accounts_claims_with_reporting_period": 1908
   },
+  "error_traces": [],
   "validation": {
     "exact_count": true,
     "unique": true,
     "within_request_cap": true
   },
   "latency_ms": {
-    "p50": 8799,
-    "p95": 126025
+    "p50": 9848,
+    "p95": 126186
   }
 }
