@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import ipaddress
 import re
@@ -12,6 +13,7 @@ import urllib.request
 import urllib.robotparser
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from html import unescape as html_unescape
 from typing import Any
 
 from bs4 import BeautifulSoup
@@ -482,6 +484,121 @@ def dated_items(html: str, page_url: str, soup: BeautifulSoup) -> list[dict[str,
     return sorted(unique.values(), key=lambda item: item["date"], reverse=True)[:12]
 
 
+# A news article sits under a news-like path segment and has a slug of its own: /nyheter/<slug>, /news/2026/<slug>,
+# /fag/nyheter-rkr/<slug>. The listing page itself (/nyheter) and product pages that merely mention news do not match.
+ARTICLE_PATH = re.compile(
+    r"/(?:nyheter|nyhet|nyhetsarkiv|aktuelt|news|newsroom|presse|pressemeldinger|pressemelding|press-releases?|blogg|blog|artikler|artikkel|stories|innsikt)"
+    r"(?:-[a-z0-9]+)*/(?:[^?#]*/)?[^/?#]{6,}/?$", re.I)
+ARTICLE_LIMIT = 4  # article pages fetched per site when its listing pages carry no dated markup
+NEWS_SITEMAP = re.compile(r"news|nyhet|post|artic|artik|aktuelt|blog|press", re.I)
+PUBLISHED_META = (
+    ("meta[property='article:published_time']", "content"), ("meta[property='og:article:published_time']", "content"),
+    ("meta[itemprop='datePublished']", "content"), ("meta[name='date']", "content"), ("meta[name='publish-date']", "content"),
+    ("meta[name='dcterms.created']", "content"), ("meta[name='DC.date.issued']", "content"),
+)
+
+
+def article_links(soup: BeautifulSoup, base_url: str, homepage_domain: str) -> list[str]:
+    """Links to news articles on the site's own domain, in page order."""
+    found: dict[str, str] = {}
+    for anchor in soup.find_all("a", href=True):
+        url = urllib.parse.urljoin(base_url, anchor["href"]).split("#", 1)[0]
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in {"http", "https"} or _registered_domain(url) != homepage_domain:
+            continue
+        if ARTICLE_PATH.search(parsed.path) and not is_static_page(url):
+            found.setdefault(url.rstrip("/"), url)
+    return list(found.values())
+
+
+def sitemap_entries(xml: bytes | str, homepage_domain: str) -> tuple[list[str], list[str]]:
+    """(news article URLs, newest first; child sitemaps, news-like names first) from a sitemap or a sitemap index."""
+    text = xml.decode("utf-8", errors="replace") if isinstance(xml, bytes) else xml
+    if "<urlset" not in text and "<sitemapindex" not in text:
+        return [], []
+    own = lambda url: _registered_domain(url) == homepage_domain  # noqa: E731
+    children = [html_unescape(loc.strip()) for loc in re.findall(r"<sitemap>.*?<loc>\s*([^<]+?)\s*</loc>.*?</sitemap>", text, re.S)]
+    children = [url for url in children if own(url)]
+    children.sort(key=lambda url: (not NEWS_SITEMAP.search(urllib.parse.urlparse(url).path), ))  # stable: document order within each group
+    articles: dict[str, str] = {}
+    for block in re.findall(r"<url>(.*?)</url>", text, re.S):
+        loc = re.search(r"<loc>\s*([^<]+?)\s*</loc>", block)
+        if not loc:
+            continue
+        url = html_unescape(loc.group(1))
+        if own(url) and ARTICLE_PATH.search(urllib.parse.urlparse(url).path) and not is_static_page(url):
+            modified = re.search(r"<lastmod>\s*([^<]+?)\s*</lastmod>", block)
+            articles.setdefault(url, (_iso_date(modified.group(1)) if modified else None) or "")
+    ordered = sorted(articles, key=lambda url: (articles[url] or "", url), reverse=True)
+    return ordered, children
+
+
+def article_item(html: str, page_url: str, soup: BeautifulSoup) -> dict[str, Any] | None:
+    """The page as one dated news item, when its own markup states when it was published.
+
+    Read in this order: JSON-LD article markup, publication meta tags, then a <time datetime> inside the
+    article element. A date printed only as text is never used.
+    """
+    if is_static_page(page_url):
+        return None
+    heading = soup.find("h1")
+    og_title = soup.select_one("meta[property='og:title']")
+    fallback_title = (og_title.get("content") if og_title and og_title.get("content") else heading.get_text(" ", strip=True) if heading else "").strip()
+    marked = dated_items(html, page_url, BeautifulSoup("", "lxml"))  # JSON-LD only: no <time> scan of the whole page
+    own = [item for item in marked if _same_page(item["url"], page_url)] or (marked if len(marked) == 1 else [])
+    if own:  # a page that marks up several other articles is a listing, not an article
+        return {"date": own[0]["date"], "title": own[0]["title"], "url": page_url, "locator": own[0]["locator"]}
+    date, locator = None, None
+    for selector, attribute in PUBLISHED_META:
+        node = soup.select_one(selector)
+        date = _iso_date(node.get(attribute)) if node else None
+        if date:
+            locator = selector
+            break
+    if not date:
+        container = soup.find("article") or soup.find("main")
+        node = container.select_one("time[datetime]") if container else None
+        date = _iso_date(node.get("datetime")) if node else None
+        locator = "article time[datetime]"
+    if not date or len(fallback_title) < 8:
+        return None
+    return {"date": date, "title": fallback_title[:200], "url": page_url, "locator": locator}
+
+
+def _sitemap_articles(home_url: str, homepage_domain: str, *, timeout: float) -> tuple[list[str], int]:
+    """News article URLs from the site's sitemap: the one robots.txt names, else /sitemap.xml. At most two requests."""
+    parsed = urllib.parse.urlparse(home_url)
+    origin = f"{parsed.scheme}://{parsed.netloc.lower()}"
+    with _robots_lock:
+        parser = _robots_cache.get(origin)
+    declared = [url for url in (parser.site_maps() or [])] if parser else []
+    queue = [url for url in declared if _registered_domain(url) == homepage_domain][:1] or [origin + "/sitemap.xml"]
+    requests = 0
+    for _ in range(2):
+        if not queue:
+            break
+        url = queue.pop(0)
+        try:
+            assert_public_url(url)
+            if not _robots_allowed(url, timeout):
+                break
+            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/xml, text/xml;q=0.9, */*;q=0.5"})
+            requests += 1
+            with _open(request, timeout=timeout) as response:
+                raw = response.read(3_000_001)
+                if len(raw) > 3_000_000 or _registered_domain(response.geturl()) != homepage_domain:
+                    break
+            if raw[:2] == b"\x1f\x8b":
+                raw = gzip.decompress(raw)
+        except Exception:
+            break
+        articles, children = sitemap_entries(raw, homepage_domain)
+        if articles:
+            return articles, requests
+        queue = children[:1]
+    return [], requests
+
+
 def identity_markers(html: str, identity: dict[str, Any] | None) -> list[str]:
     """Exact registry markers present in raw HTML (footers included): orgnr, phone, address."""
     if not identity:
@@ -556,6 +673,8 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
             "identity_snippets": marker_snippets(page_html, identity),
             "category": page_category(final_url),  # where the server actually took us, not what the link promised
             "dated_items": dated_items(page_html, final_url, page_soup),
+            "article": article_item(page_html, final_url, page_soup),
+            "article_links": article_links(page_soup, final_url, homepage_domain),
             "url": final_url,
             "title": page_soup.title.get_text(" ", strip=True)[:500] if page_soup.title else "",
             "main_text_excerpt": page_text[:5000],
@@ -689,7 +808,22 @@ def fetch_website(
         news: dict[str, dict[str, Any]] = {}
         for item in feed_news + home_news + [item for page in pages[1:] for item in page.get("dated_items") or []]:
             news.setdefault(item["title"].casefold() + item["date"], item)
-        value["news_items"] = sorted(news.values(), key=lambda item: item["date"], reverse=True)[:12]
+        if max_pages and len(news) < ARTICLE_LIMIT:
+            # The listing pages carried no dated markup: read a few articles themselves, each cited as its own source.
+            seen_pages = {page["url"].rstrip("/") for page in pages}
+            candidates = list(dict.fromkeys(article_links(soup, final_url, homepage_domain) + [url for page in pages[1:] for url in page.get("article_links") or []]))
+            if len(candidates) < ARTICLE_LIMIT:
+                from_sitemap, sitemap_requests = _sitemap_articles(final_url, homepage_domain, timeout=timeout)
+                requests += sitemap_requests
+                candidates = list(dict.fromkeys(candidates + from_sitemap))
+            for article_url in [url for url in candidates if url.rstrip("/") not in seen_pages][:ARTICLE_LIMIT]:
+                page, _, page_requests, page_bytes, _, _ = _fetch_secondary_page(article_url, homepage_domain=homepage_domain, timeout=timeout, max_bytes=min(max_bytes, 1_000_000))
+                requests += page_requests
+                bytes_received += page_bytes
+                item = (page or {}).get("article")
+                if item:
+                    news.setdefault(item["title"].casefold() + item["date"], {**item, "found_in": {"url": page["url"], "content_sha256": page["content_sha256"]}})
+        value["news_items"] = sorted(news.values(), key=lambda item: (item["date"], item["url"]), reverse=True)[:12]
         value["careers_pages"] = [page["url"] for page in pages[1:] if page.get("category") == "careers" and not _same_page(page["url"], final_url)]
         value["social_links"] = list({(item["platform"], item["url"]): item for item in social}.values())
         value["crawl_errors"] = crawl_errors

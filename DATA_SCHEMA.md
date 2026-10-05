@@ -125,6 +125,6 @@ The `website_scope` claim says how the published site is tied to the entity:
 | leadership | registered roles (CEO, chair, board, deputies, owners), auditor, accountant |
 | registered_workplaces | subunits with address, industry, registered employees |
 | official_website | verified website plus discovery method |
-| company_profiles | social profiles linked from the verified site or declared in its Organization markup |
-| jobs | active NAV job ads (exact orgnr), careers page |
-| dated_activity | website news items, job postings, registered role changes, accounts filed |
+| company_profiles | `social_profile`: one claim per profile linked from the verified site or declared in its Organization markup; the value is the profile URL and `platform` names the network |
+| jobs | `hiring_signal`: one claim per signal, the value is its URL and `signal` is `careers_page` or `job_ad`; `open_job`: the full NAV ad (exact orgnr) |
+| dated_activity | `dated_news`: `{date, title, url}` per news item on the verified site; `job_posted`; registered role changes; accounts filed |

@@ -387,7 +387,7 @@ def test_member_page_on_a_chain_site_publishes_only_the_labelled_url(url):
 ])
 def test_own_or_number_verified_sites_keep_their_content(final_url, markers):
     envelope = build_envelope(chain_profile(final_url, markers), run=RUN)
-    assert web_fields(envelope) == ["careers_page", "facebook", "official_website", "self_description", "website_brand_title", "website_news", "website_scope"]
+    assert web_fields(envelope) == ["dated_news", "hiring_signal", "official_website", "self_description", "social_profile", "website_brand_title", "website_scope"]
 
 
 def test_site_index_row_carries_leaders_and_presence_counts_for_search_and_filters(tmp_path):
@@ -472,7 +472,8 @@ def international_profile(legal_form="AS", home=(), contact=(), name="KITRON AS"
 def test_international_domain_is_only_a_group_site_without_norwegian_proof(legal_form, home, contact, scope, profiles):
     envelope = build_envelope(international_profile(legal_form, home, contact), run=RUN)
     assert [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"] == [scope]
-    assert sorted(c["field"] for c in envelope["claims"] if c["family"] == "company_profiles") == profiles
+    assert sorted(c["platform"] for c in envelope["claims"] if c["family"] == "company_profiles") == profiles
+    assert {c["field"] for c in envelope["claims"] if c["family"] == "company_profiles"} <= {"social_profile"}
 
 
 def test_norwegian_domain_scope_does_not_depend_on_which_pages_were_reachable():
@@ -853,7 +854,7 @@ def news_profile():
 def test_news_cites_the_feed_or_page_it_was_read_from():
     envelope = build_envelope(news_profile(), run=RUN)
     records = {item["id"]: item for item in envelope["evidence"]}
-    cited = {c["value"]["title"]: records[c["evidence_ids"][0]] for c in envelope["claims"] if c["field"] == "website_news"}
+    cited = {c["value"]["title"]: records[c["evidence_ids"][0]] for c in envelope["claims"] if c["field"] == "dated_news"}
     assert (cited["Ny avtale signert"]["source_url"], cited["Ny avtale signert"]["content_sha256"]) == ("https://aas.no/feed/", "9" * 64)
     assert (cited["Sommerstengt"]["source_url"], cited["Sommerstengt"]["content_sha256"]) == ("https://aas.no/nyheter/", "8" * 64)
 
@@ -1358,3 +1359,96 @@ def test_refresh_discovers_the_website_the_same_way_as_a_first_run(monkeypatch):
     p["known_website"] = {"url": "https://www.aas.no/", "source_class": "name_derived_domain", "discovery": "name_derived_domain"}
     pipeline.research_discovery(p)
     assert calls == ["guess", "search"]
+
+
+# -- external facts are published under the scored family names --------------------------------------
+def _external_profile():
+    p = profile()
+    url = "https://www.aaselektronikk.no/"
+    p["evidence"]["website"] = evidence("website", "available", "registry_linked_company_website", url, value={
+        "final_url": url, "requested_url": url, "content_sha256": "f" * 64, "identity_markers": {url: ["organisation_number"]},
+        "identity_assessment": {"publishable": True, "score": 1.0, "reasons": ["orgnr"], "method": "m"},
+        "social_links": [{"platform": "facebook", "url": "https://facebook.com/aaselektronikk"}, {"platform": "linkedin", "url": "https://linkedin.com/company/aas-elektronikk"}],
+        "careers_pages": ["https://www.aaselektronikk.no/jobb"],
+        "news_items": [{"date": "2026-09-01", "title": "Ny butikk", "url": "https://www.aaselektronikk.no/nyheter/ny-butikk", "locator": "time[datetime]"}]})
+    p["evidence"]["jobs"] = evidence("jobs", "available", "official_job_register_nav", "https://pam-stilling-feed.nav.no", value={"window_days": 45, "jobs": [
+        {"uuid": "u1", "title": "Montør", "published": "2026-09-20T00:00:00+02:00", "public_url": "https://arbeidsplassen.nav.no/stillinger/stilling/u1",
+         "source_url": "https://pam-stilling-feed.nav.no/api/v1/feedentry/u1", "employer_orgnr": "888567232", "matched_via": "exact_organisation_number",
+         "content_sha256": "f" * 64, "retrieved_at": "2026-09-27T00:00:20Z"}]})
+    return p
+
+
+def test_social_hiring_and_news_use_the_scored_family_names():
+    envelope = build_envelope(_external_profile(), run=RUN)
+    by_field = {}
+    for claim in envelope["claims"]:
+        by_field.setdefault(claim["field"], []).append(claim)
+    assert sorted((c["platform"], c["value"]) for c in by_field["social_profile"]) == [
+        ("facebook", "https://facebook.com/aaselektronikk"), ("linkedin", "https://linkedin.com/company/aas-elektronikk")]
+    assert sorted((c["signal"], c["value"]) for c in by_field["hiring_signal"]) == [
+        ("careers_page", "https://www.aaselektronikk.no/jobb"), ("job_ad", "https://arbeidsplassen.nav.no/stillinger/stilling/u1")]
+    assert [c["value"] for c in by_field["dated_news"]] == [{"date": "2026-09-01", "title": "Ny butikk", "url": "https://www.aaselektronikk.no/nyheter/ny-butikk"}]
+    assert len(by_field["open_job"]) == 1  # the detailed ad is still published
+    assert not {"facebook", "linkedin", "careers_page", "website_news"} & set(by_field)
+    summary = build_summary(apply_refresh(None, envelope))["text"]
+    assert "facebook, linkedin" in summary and "hiring" in summary and "Ny butikk" in summary
+
+
+def test_a_job_ad_reports_one_change_not_two():
+    without = _external_profile()
+    without["evidence"]["jobs"]["value"]["jobs"] = []
+    first = apply_refresh(None, build_envelope(without, run=RUN))
+    opened = apply_refresh(copy.deepcopy(first), build_envelope(_external_profile(), run=RUN2))
+    assert [c["change_type"] for c in opened["changes"] if c["family"] == "jobs"] == ["new_job"]
+    closed = apply_refresh(copy.deepcopy(opened), build_envelope(without, run=RUN2))
+    assert [c["change_type"] for c in closed["changes"] if c["family"] == "jobs"] == ["closed_job"]
+    assert not [c for c in closed["claims"] if c["field"] == "hiring_signal" and c.get("signal") == "job_ad"]
+
+
+# -- news articles: found through links and the sitemap, dated only by structured markup --------------
+def test_article_links_keep_news_articles_on_the_same_domain_in_page_order():
+    from bs4 import BeautifulSoup
+    from abhikilde.website import article_links
+
+    html = """<a href="/nyheter">Nyheter</a><a href="/nyheter/nytt-utstyr-for-slyngerensing">a</a><a href="/produkt/kikkert-nyhet">p</a>
+    <a href="https://www.aas.no/fag/nyheter-rkr/bedre-sosial-funksjon/">b</a><a href="https://other.no/nyheter/noe-annet-her">x</a>
+    <a href="/nyheter/nytt-utstyr-for-slyngerensing#top">dup</a><a href="/news/2026/big-contract-signed?utm=1">c</a><a href="/aktuelt/kontakt-oss">static</a>"""
+    assert article_links(BeautifulSoup(html, "lxml"), "https://www.aas.no/", "aas.no") == [
+        "https://www.aas.no/nyheter/nytt-utstyr-for-slyngerensing", "https://www.aas.no/fag/nyheter-rkr/bedre-sosial-funksjon/", "https://www.aas.no/news/2026/big-contract-signed?utm=1"]
+
+
+def test_sitemap_lists_news_articles_newest_first_and_names_child_sitemaps():
+    from abhikilde.website import sitemap_entries
+
+    urlset = b"""<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url><loc>https://www.aas.no/om-oss/</loc><lastmod>2026-09-01</lastmod></url>
+      <url><loc>https://www.aas.no/nyheter/eldre-sak-fra-i-fjor/</loc><lastmod>2025-01-05T10:00:00+01:00</lastmod></url>
+      <url><loc>https://www.aas.no/nyheter/ny-sak-denne-uken/</loc><lastmod>2026-09-20</lastmod></url>
+      <url><loc>https://www.aas.no/nyheter/uten-dato-men-en-sak/</loc></url>
+      <url><loc>https://other.no/nyheter/ikke-var-side/</loc><lastmod>2026-09-25</lastmod></url></urlset>"""
+    articles, children = sitemap_entries(urlset, "aas.no")
+    assert articles == ["https://www.aas.no/nyheter/ny-sak-denne-uken/", "https://www.aas.no/nyheter/eldre-sak-fra-i-fjor/", "https://www.aas.no/nyheter/uten-dato-men-en-sak/"]
+    assert children == []
+    index = b"""<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><sitemap><loc>https://www.aas.no/page-sitemap.xml</loc></sitemap>
+      <sitemap><loc>https://www.aas.no/post-sitemap.xml</loc></sitemap><sitemap><loc>https://evil.example/post-sitemap.xml</loc></sitemap></sitemapindex>"""
+    assert sitemap_entries(index, "aas.no") == ([], ["https://www.aas.no/post-sitemap.xml", "https://www.aas.no/page-sitemap.xml"])
+    assert sitemap_entries(b"<html>not a sitemap", "aas.no") == ([], [])
+
+
+@pytest.mark.parametrize("markup, expected", [
+    ('<script type="application/ld+json">{"@type":"NewsArticle","headline":"Bedre sosial funksjon etter hjerneskade","datePublished":"2025-09-22T20:00:00+02:00"}</script>',
+     ("2025-09-22", "Bedre sosial funksjon etter hjerneskade", "script[type='application/ld+json']")),
+    ('<meta property="article:published_time" content="2026-03-04T08:00:00Z"><meta property="og:title" content="Ny kontrakt signert i Bergen"><h1>x</h1>',
+     ("2026-03-04", "Ny kontrakt signert i Bergen", "meta[property='article:published_time']")),
+    ('<article><h1>Vi åpner ny avdeling</h1><time datetime="2026-02-01">1. februar</time></article>', ("2026-02-01", "Vi åpner ny avdeling", "article time[datetime]")),
+    ('<article><h1>Publisert 3 September 2026 uten markup</h1><time datetime="3 September 2026">x</time></article>', None),  # dates are never guessed from free text
+    ('<aside><time datetime="2026-02-01">x</time></aside><h1>En side uten artikkel</h1>', None),
+])
+def test_an_article_is_dated_only_by_structured_markup(markup, expected):
+    from bs4 import BeautifulSoup
+    from abhikilde.website import article_item
+
+    html = f"<html><head><title>t</title></head><body>{markup}</body></html>"
+    item = article_item(html, "https://www.aas.no/nyheter/en-sak-om-noe/", BeautifulSoup(html, "lxml"))
+    assert (item and (item["date"], item["title"], item["locator"])) == expected
+    assert item is None or item["url"] == "https://www.aas.no/nyheter/en-sak-om-noe/"

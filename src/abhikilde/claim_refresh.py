@@ -47,7 +47,17 @@ NON_REMOVABLE = {"dated_activity", "filing_history"}  # history does not "disapp
 # Website-derived facts flap when a site is slow or a page times out. A removal is reported only after
 # two consecutive runs miss the fact; the first miss carries it forward as stale.
 DEBOUNCED_FAMILIES = {"official_website", "company_profiles", "public_brand"}
-DEBOUNCED_FIELDS = {"careers_page", "website_news"}
+DEBOUNCED_FIELDS = {"dated_news"}
+
+
+def _website_derived(claim: dict[str, Any]) -> bool:
+    careers_page = claim.get("field") == "hiring_signal" and claim.get("signal") == "careers_page"
+    return claim.get("family") in DEBOUNCED_FAMILIES or claim.get("field") in DEBOUNCED_FIELDS or careers_page
+
+
+def _shadows_open_job(claim: dict[str, Any]) -> bool:
+    """A NAV ad is published twice: in detail (open_job) and as a plain hiring signal. Only the first reports changes."""
+    return claim.get("field") == "hiring_signal" and claim.get("signal") == "job_ad"
 
 
 def _change_id(*parts: Any) -> str:
@@ -91,7 +101,9 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
     for key, claim in curr_claims.items():
         before = prev_claims.get(key)
         if before is None:
-            website_derived = claim["family"] in DEBOUNCED_FAMILIES or claim["field"] in DEBOUNCED_FIELDS
+            if _shadows_open_job(claim):
+                continue
+            website_derived = _website_derived(claim)
             if previous_availability.get(claim["family"]) in {None, "failed", "blocked"} or website_derived:
                 # Either the source was not checked last run, or this is a website-derived fact that
                 # discovery may simply have missed before: a first observation, not a change in the world.
@@ -134,7 +146,9 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
         family = before.get("family")
         family_state = availability.get(family)
         source_checked = family_state in {"available", "not_available"}
-        debounced = family in DEBOUNCED_FAMILIES or before.get("field") in DEBOUNCED_FIELDS
+        debounced = _website_derived(before)
+        if source_checked and _shadows_open_job(before):
+            continue
         first_miss = debounced and not before.get("stale")
         if family in NON_REMOVABLE or not source_checked or family not in REMOVED or first_miss:
             # Keep the last supported value; expose it as not re-verified in this run.

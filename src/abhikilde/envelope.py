@@ -185,6 +185,7 @@ class EnvelopeBuilder:
         reporting_period: str | None = None,
         effective_date: str | None = None,
         confidence: float = 1.0,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         if value is None or value == "" or value == [] or value == {}:
             return  # absence is a field state, never a claim
@@ -215,6 +216,7 @@ class EnvelopeBuilder:
             # source_text: found verbatim in the fetched source; rendered_value: written out from the parsed value
             "span_kind": "source_text" if getattr(span, "exact", False) else "rendered_value",
             "value_hash": _hash(value)[:16],
+            **(extra or {}),
         })
 
     def state(self, family: str, state: str, reason: str | None = None, **extra: Any) -> None:
@@ -518,14 +520,14 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
             social = [link for link in social if NORWAY_HANDLE.search(link["url"].rsplit("/", 1)[-1])]
         for link in social:
             declared_in = link.get("declared_in") or "a[href]"
-            builder.claim("company_profiles", link["platform"], link["url"], eid, identity=[link["platform"], link["url"]], locator=declared_in,
-                          span=f"{declared_in} on the verified company website: {link['url']}")
+            builder.claim("company_profiles", "social_profile", link["url"], eid, identity=[link["platform"], link["url"]], locator=declared_in,
+                          span=f"{declared_in} on the verified company website: {link['url']}", extra={"platform": link["platform"]})
         if not social:
             builder.state("company_profiles", "not_available", "verified website links no company-owned social profiles")
         group_site = scope in {"possibly_group_or_international", "page_on_third_party_site"}
         for page in [] if group_site else value.get("careers_pages") or []:
-            builder.claim("jobs", "careers_page", page, eid, identity=["careers_page", page], locator="a[href]",
-                          span=f"careers page linked from the verified company website: {page}")
+            builder.claim("jobs", "hiring_signal", page, eid, identity=["careers_page", page], locator="a[href]",
+                          span=f"careers page linked from the verified company website: {page}", extra={"signal": "careers_page"})
         for item in [] if group_site else value.get("news_items") or []:
             # cite the page or feed the item was read from, not the homepage
             found_in = item.get("found_in") or {}
@@ -533,7 +535,7 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
                 source_url=found_in.get("url"), source_class=website.get("source_type") or "company_website", retrieved_at=found_in.get("retrieved_at") or website.get("retrieved_at"),
                 content_sha256=found_in.get("content_sha256"), extraction_method="site_feed_v1" if str(item.get("locator") or "").startswith(("rss:", "atom:")) else "site_page_markup_v1",
                 span=f"dated items on the verified site {urllib.parse.urlparse(value.get('final_url') or '').hostname}")
-            builder.claim("dated_activity", "website_news", {"date": item.get("date"), "title": item.get("title"), "url": item.get("url")},
+            builder.claim("dated_activity", "dated_news", {"date": item.get("date"), "title": item.get("title"), "url": item.get("url")},
                           news_eid, identity=["website_news", item.get("url")], effective_date=item.get("date"), locator=item.get("locator"),
                           span=Quote(f"{item.get('title')} ({item.get('locator')}: {item.get('date')})", exact=True))
     elif state == "available":
@@ -623,6 +625,9 @@ def build_activity(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
             value = {key: job.get(key) for key in ("title", "job_title", "published", "expires", "application_due", "engagement_type", "extent", "positions", "work_locations", "public_url")}
             builder.claim("jobs", "open_job", value, eid, identity=["nav", job.get("uuid")], effective_date=str(job.get("published") or "")[:10] or None,
                           locator="$.ad_content", span=f"employer orgnr {job.get('employer_orgnr')}")
+            # The same ad as a plain hiring signal: one URL per ad, next to the detailed open_job claim.
+            builder.claim("jobs", "hiring_signal", job.get("public_url"), eid, identity=["job_ad", job.get("uuid")], effective_date=str(job.get("published") or "")[:10] or None,
+                          locator="$.ad_content", span=f"{job.get('title')} (employer orgnr {job.get('employer_orgnr')})", extra={"signal": "job_ad"})
             builder.claim("dated_activity", "job_posted", {"date": str(job.get("published") or "")[:10], "title": job.get("title"), "url": job.get("public_url")},
                           eid, identity=["job_posted", job.get("uuid")], effective_date=str(job.get("published") or "")[:10] or None, locator="$.ad_content.published",
                           span=f"{job.get('title')} (published {str(job.get('published') or '')[:10]}; employer orgnr {job.get('employer_orgnr')})")

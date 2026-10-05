@@ -19,6 +19,7 @@ Every outbound request, including redirects, retries and robots.txt, passes one 
 - robots.txt is honoured for the user agent `abhikilde/1.0`. A 4xx robots response means no restrictions; a 5xx means disallow.
 - Static HTML only. No browser, no JavaScript rendering.
 - Priority pages are chosen one per category: about, contact, careers, news, people, locations.
+- News articles: when the homepage, the priority pages and the feed give fewer than 4 dated items, up to 4 article pages are read. Candidates are links under a news-like path (`/nyheter/<slug>`, `/news/<slug>`, `/aktuelt/<slug>` …) in page order, then the same kind of URL from the sitemap that robots.txt names (else `/sitemap.xml`), newest `lastmod` first. Each article is cited as its own source.
 - A homepage over 2 MB, a page over 1 MB or a feed over 1 MB is not read.
 
 ## Fallback order for a missing website

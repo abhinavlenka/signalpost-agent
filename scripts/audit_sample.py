@@ -15,7 +15,7 @@ from collections import Counter
 from pathlib import Path
 
 EXTERNAL_FAMILIES = {"official_website", "company_profiles", "jobs", "public_brand"}
-EXTERNAL_FIELDS = {"website_news", "job_posted"}
+EXTERNAL_FIELDS = {"dated_news", "job_posted"}
 
 
 def main() -> None:

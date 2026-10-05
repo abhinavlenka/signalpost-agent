@@ -199,15 +199,15 @@ def build_summary(envelope: dict[str, Any]) -> dict[str, Any]:
             say("presence", f"Its verified website is {website['value']}.", website)
     profiles = [claim for (family, _), items in by_field.items() if family == "company_profiles" for claim in items]
     if profiles:
-        say("presence", "Company-owned profiles linked from that site: " + ", ".join(sorted({claim["field"] for claim in profiles})) + ".", *profiles)
+        say("presence", "Company-owned profiles linked from that site: " + ", ".join(sorted({claim.get("platform") or claim["field"] for claim in profiles})) + ".", *profiles)
     jobs = by_field.get(("jobs", "open_job"), [])
     if jobs:
         titles = "; ".join(str((claim["value"] or {}).get("title") or "")[:80] for claim in jobs[:3])
         say("presence", f"It appears to be hiring: {len(jobs)} active NAV job ad(s), e.g. {titles}.", *jobs[:3])
-    careers = first("jobs", "careers_page")
+    careers = next((claim for claim in by_field.get(("jobs", "hiring_signal"), []) if claim.get("signal") == "careers_page"), None)
     if careers and not jobs:
         say("presence", f"Its site has a careers page: {careers['value']}.", careers)
-    news = sorted(by_field.get(("dated_activity", "website_news"), []), key=lambda claim: str(claim.get("effective_date") or ""))
+    news = sorted(by_field.get(("dated_activity", "dated_news"), []), key=lambda claim: str(claim.get("effective_date") or ""))
     if news:
         latest_news = news[-1]["value"] or {}
         say("presence", f"The latest dated item on its site is “{str(latest_news.get('title'))[:120]}” ({latest_news.get('date')}).", news[-1])
