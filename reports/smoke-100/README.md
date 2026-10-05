@@ -1,6 +1,6 @@
 # 100-company smoke test
 
-Run on 2026-10-05 from a fresh clone at commit `93e564d`, in an empty virtual environment, with only the declared install step:
+Run on 2026-10-06 from a fresh clone at commit `ed59397`, in an empty virtual environment, with only the declared install step:
 
 ```bash
 uv sync --frozen
@@ -18,10 +18,10 @@ The batch is 100 organisation numbers drawn at random from the public universe. 
 | Envelopes | [`first-run-envelopes.jsonl`](first-run-envelopes.jsonl) | [`envelopes.jsonl`](envelopes.jsonl) |
 | Envelopes returned | 100 of 100 | 100 of 100 |
 | Envelope state | 100 `available` | 100 `available` |
-| Claims | 4,743 | 4,743 |
+| Claims | 4,774 | 4,774 |
 | Changes reported | 0 | 0 |
-| Outbound requests | 1,073 of 1,900 allowed | 1,071 of 1,900 allowed |
-| Wall-clock time | 5 min 14 s | 5 min 37 s |
+| Outbound requests | 1,071 of 1,900 allowed | 1,073 of 1,900 allowed |
+| Wall-clock time | 5 min 19 s | 5 min 57 s |
 | Third-party API cost | $0 | $0 |
 
 The same 100 profiles are browsable in the explorer under [`docs/`](../../docs/), which the run command writes to `out/site/`.
@@ -51,14 +51,14 @@ In both live differences a page returned different bytes on the two fetches (a f
 
 ## Evidence completeness (refresh run)
 
-| Of 4,743 published claims | Count |
+| Of 4,774 published claims | Count |
 |---|---|
-| with a source URL and retrieval time | 4,743 |
-| with a content hash | 4,743 |
-| with a stored raw snapshot | 4,743 |
-| with a locator | 4,743 |
-| with a span | 4,743 |
-| of which the span was found verbatim in the fetched source | 4,727 |
+| with a source URL and retrieval time | 4,774 |
+| with a content hash | 4,774 |
+| with a stored raw snapshot | 4,774 |
+| with a locator | 4,774 |
+| with a span | 4,774 |
+| of which the span was found verbatim in the fetched source | 4,750 |
 | accounts claims with a reporting period | 1,908 of 1,908 |
 
 The raw snapshots themselves stay in the run's state directory and are not committed.
@@ -68,9 +68,11 @@ The raw snapshots themselves stay in the run's state directory and are not commi
 | Claim field | Companies | Claims |
 |---|---|---|
 | `official_website` | 11 | 11 |
-| `social_profile` | 6 | 8 |
+| `company_profile` | 6 | 8 |
 | `hiring_signal` | 3 | 3 |
 | `dated_news` | 3 | 23 |
+
+Each profile is also published as `social_profile` and each news item as `dated_activity`, marked `alias_of`; the aliases are not counted here.
 
 ## Field states (identical in both runs)
 

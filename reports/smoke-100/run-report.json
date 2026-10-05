@@ -1,7 +1,7 @@
 {
   "run_id": "smoke100-run",
   "agent_version": "abhikilde/1.0.0",
-  "started_at": "2026-10-05T13:39:47.386002Z",
+  "started_at": "2026-10-05T21:33:49.033011Z",
   "input": "data/batch-rehearsal-100.txt",
   "invalid_inputs": [],
   "limits": {
@@ -24,29 +24,29 @@
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 25.4,
-      "requests": 512
+      "seconds": 25.0,
+      "requests": 513
     },
     "registry_websites": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 21.0,
-      "requests": 94
+      "seconds": 16.4,
+      "requests": 92
     },
     "website_discovery": {
       "companies": 96,
       "done": 96,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 253.8,
-      "requests": 462
+      "seconds": 251.0,
+      "requests": 457
     },
     "accounts": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 15.7,
-      "requests": 380
+      "seconds": 15.1,
+      "requests": 377
     }
   },
   "accounts_retry": {
@@ -58,14 +58,14 @@
   "nav": {
     "source": "nav_pam_stilling_feed",
     "pages": 93,
-    "ads_indexed": 29877,
-    "active_ads": 8954,
+    "ads_indexed": 29934,
+    "active_ads": 9013,
     "complete": true,
     "error": null,
-    "started_at": "2026-10-05T13:39:47.387797Z",
-    "completed_at": "2026-10-05T13:45:00.145792Z"
+    "started_at": "2026-10-05T21:33:49.034430Z",
+    "completed_at": "2026-10-05T21:39:07.600842Z"
   },
-  "completed_at": "2026-10-05T13:45:00.431762Z",
+  "completed_at": "2026-10-05T21:39:07.793568Z",
   "expected": 100,
   "emitted_envelopes": 100,
   "envelope_states": {
@@ -114,15 +114,15 @@
       "available": 100
     }
   },
-  "claims": 4743,
+  "claims": 4774,
   "changes": 0,
   "budget": {
     "max_requests": 1900,
-    "requests_used": 1073,
-    "elapsed_seconds": 313.6,
+    "requests_used": 1071,
+    "elapsed_seconds": 319.0,
     "by_purpose": {
-      "website": 229,
-      "robots": 157,
+      "website": 228,
+      "robots": 156,
       "brreg_financials": 100,
       "brreg_registry_live": 100,
       "brreg_roles": 100,
@@ -148,7 +148,7 @@
       "heidi428.wix.com": 8,
       "www.ajconsulting.com": 8,
       "www.datanova.no": 7,
-      "gt-eiendom.no": 7
+      "vildeinga.com": 7
     }
   },
   "search": {
@@ -160,13 +160,13 @@
   "third_party_cost_usd": 0.0,
   "cost_per_company_usd": 0.0,
   "evidence": {
-    "claims": 4743,
-    "with_source_and_retrieval_time": 4743,
-    "with_content_hash": 4743,
-    "with_any_span": 4743,
-    "with_quoted_span": 4727,
-    "with_locator": 4743,
-    "with_stored_snapshot": 4743,
+    "claims": 4774,
+    "with_source_and_retrieval_time": 4774,
+    "with_content_hash": 4774,
+    "with_any_span": 4774,
+    "with_quoted_span": 4750,
+    "with_locator": 4774,
+    "with_stored_snapshot": 4774,
     "accounts_claims": 1908,
     "accounts_claims_with_reporting_period": 1908
   },
@@ -177,7 +177,7 @@
     "within_request_cap": true
   },
   "latency_ms": {
-    "p50": 11704,
-    "p95": 126435
+    "p50": 8916,
+    "p95": 126216
   }
 }
