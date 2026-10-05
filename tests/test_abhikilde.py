@@ -387,7 +387,7 @@ def test_member_page_on_a_chain_site_publishes_only_the_labelled_url(url):
 ])
 def test_own_or_number_verified_sites_keep_their_content(final_url, markers):
     envelope = build_envelope(chain_profile(final_url, markers), run=RUN)
-    assert web_fields(envelope) == ["company_profile", "dated_news", "hiring_signal", "official_website", "self_description", "social_profile", "website_brand_title", "website_scope"]
+    assert web_fields(envelope) == ["company_profile", "dated_activity", "dated_news", "hiring_signal", "official_website", "self_description", "social_profile", "website_brand_title", "website_scope"]
 
 
 def test_site_index_row_carries_leaders_and_presence_counts_for_search_and_filters(tmp_path):
@@ -1403,6 +1403,9 @@ def test_social_hiring_and_news_use_the_scored_family_names():
     news = by_field["dated_news"][0]
     assert news["value"] == "Ny butikk (2026-09-01T08:30:00+02:00)"
     assert (news["title"], news["date"], news["published_at"], news["url"]) == ("Ny butikk", "2026-09-01", "2026-09-01T08:30:00+02:00", "https://www.aaselektronikk.no/nyheter/ny-butikk")
+    activity = by_field["dated_activity"][0]  # the same news item under the other name in use, marked as an alias
+    assert (activity["value"], activity["alias_of"], activity["url"]) == (news["value"], "dated_news", news["url"]) and "alias_of" not in news
+    assert activity["evidence_ids"] == news["evidence_ids"]
     assert len(by_field["open_job"]) == 1  # the detailed ad is still published
     assert not {"facebook", "linkedin", "careers_page", "website_news"} & set(by_field)
     summary = build_summary(apply_refresh(None, envelope))["text"]

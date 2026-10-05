@@ -545,10 +545,13 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
                 content_sha256=found_in.get("content_sha256"), extraction_method="site_feed_v1" if str(item.get("locator") or "").startswith(("rss:", "atom:")) else "site_page_markup_v1",
                 span=f"dated items on the verified site {urllib.parse.urlparse(value.get('final_url') or '').hostname}")
             # A plain string, "Title (published time)": the full timestamp when the source states one, else the date.
-            builder.claim("dated_activity", "dated_news", f"{item.get('title')} ({item.get('published_at') or item.get('date')})",
-                          news_eid, identity=["website_news", item.get("url")], effective_date=item.get("date"), locator=item.get("locator"),
-                          span=Quote(f"{item.get('title')} ({item.get('locator')}: {item.get('date')})", exact=True),
-                          extra={"title": item.get("title"), "date": item.get("date"), "published_at": item.get("published_at"), "url": item.get("url")})
+            # Published under both names in use for this fact, like a profile; the second is the marked alias.
+            for field, alias in (("dated_news", None), ("dated_activity", "dated_news")):
+                builder.claim("dated_activity", field, f"{item.get('title')} ({item.get('published_at') or item.get('date')})",
+                              news_eid, identity=["website_news", item.get("url")], effective_date=item.get("date"), locator=item.get("locator"),
+                              span=Quote(f"{item.get('title')} ({item.get('locator')}: {item.get('date')})", exact=True),
+                              extra={"title": item.get("title"), "date": item.get("date"), "published_at": item.get("published_at"), "url": item.get("url"),
+                                     **({"alias_of": alias} if alias else {})})
     elif state == "available":
         builder.state("official_website", "ambiguous", "candidate site failed exact-entity identity gate: " + "; ".join(assessment.get("reasons") or []),
                       candidate=value.get("final_url"))

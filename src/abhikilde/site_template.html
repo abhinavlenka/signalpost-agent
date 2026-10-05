@@ -786,7 +786,7 @@ $("#cclear").onclick = () => { selected.clear(); updateBar(); $$(".cmp").forEach
 function fmtValue(c) {
   const v = c.value;
   if (c.field === "website_scope") return esc(SCOPE_LABEL[v] || human(v));
-  if (c.field === "dated_news") return `${esc(c.date || "")} — ${c.url ? link(c.url, c.title) : esc(c.title || v)}`;
+  if (c.field === "dated_news" || c.alias_of === "dated_news") return `${esc(c.date || "")} — ${c.url ? link(c.url, c.title) : esc(c.title || v)}`;
   if (c.field === "share_capital" && typeof v === "number") return `NOK ${new Intl.NumberFormat("en-GB").format(v)}`;
   if (v && typeof v === "object" && !Array.isArray(v)) {
     if ("amount" in v) return `${esc(v.currency||"NOK")} ${money(v.amount)} <span class="sub">${esc(new Intl.NumberFormat("en-GB").format(v.amount))}</span>`;
