@@ -1,6 +1,6 @@
 # 100-company smoke test
 
-Run on 2026-10-04 from a fresh clone at commit `4f00660`, in an empty virtual environment, with only the declared install step:
+Run on 2026-10-05 from a fresh clone at commit `93e564d`, in an empty virtual environment, with only the declared install step:
 
 ```bash
 uv sync --frozen
@@ -20,8 +20,8 @@ The batch is 100 organisation numbers drawn at random from the public universe. 
 | Envelope state | 100 `available` | 100 `available` |
 | Claims | 4,743 | 4,743 |
 | Changes reported | 0 | 0 |
-| Outbound requests | 1,036 of 1,900 allowed | 1,035 of 1,900 allowed |
-| Wall-clock time | 5 min 15 s | 5 min 8 s |
+| Outbound requests | 1,073 of 1,900 allowed | 1,071 of 1,900 allowed |
+| Wall-clock time | 5 min 14 s | 5 min 37 s |
 | Third-party API cost | $0 | $0 |
 
 The same 100 profiles are browsable in the explorer under [`docs/`](../../docs/), which the run command writes to `out/site/`.
@@ -62,6 +62,15 @@ In both live differences a page returned different bytes on the two fetches (a f
 | accounts claims with a reporting period | 1,908 of 1,908 |
 
 The raw snapshots themselves stay in the run's state directory and are not committed.
+
+## External facts (refresh run)
+
+| Claim field | Companies | Claims |
+|---|---|---|
+| `official_website` | 11 | 11 |
+| `social_profile` | 6 | 8 |
+| `hiring_signal` | 3 | 3 |
+| `dated_news` | 3 | 23 |
 
 ## Field states (identical in both runs)
 

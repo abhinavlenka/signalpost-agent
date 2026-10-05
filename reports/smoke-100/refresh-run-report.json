@@ -1,7 +1,7 @@
 {
   "run_id": "smoke100-refresh",
   "agent_version": "abhikilde/1.0.0",
-  "started_at": "2026-10-04T09:43:48.262902Z",
+  "started_at": "2026-10-05T13:45:02.406654Z",
   "input": "data/batch-rehearsal-100.txt",
   "invalid_inputs": [],
   "limits": {
@@ -20,7 +20,7 @@
     "previous_runs": [
       {
         "run_id": "smoke100-run",
-        "completed_at": "2026-10-04T09:43:47.385831Z",
+        "completed_at": "2026-10-05T13:45:00.431762Z",
         "envelopes": 100
       }
     ]
@@ -30,29 +30,29 @@
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 32.5,
-      "requests": 515
+      "seconds": 27.3,
+      "requests": 507
     },
     "registry_websites": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 13.4,
-      "requests": 75
+      "seconds": 22.6,
+      "requests": 93
     },
     "website_discovery": {
       "companies": 96,
       "done": 96,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 250.2,
-      "requests": 440
+      "seconds": 252.9,
+      "requests": 461
     },
     "accounts": {
       "companies": 100,
       "done": 100,
       "skipped_for_deadline_or_budget": 0,
-      "seconds": 15.8,
-      "requests": 375
+      "seconds": 16.7,
+      "requests": 382
     }
   },
   "accounts_retry": {
@@ -63,15 +63,15 @@
   },
   "nav": {
     "source": "nav_pam_stilling_feed",
-    "pages": 94,
-    "ads_indexed": 29862,
-    "active_ads": 9193,
+    "pages": 93,
+    "ads_indexed": 29882,
+    "active_ads": 8959,
     "complete": true,
     "error": null,
-    "started_at": "2026-10-04T09:43:48.301134Z",
-    "completed_at": "2026-10-04T09:48:56.139591Z"
+    "started_at": "2026-10-05T13:45:02.480591Z",
+    "completed_at": "2026-10-05T13:50:38.515647Z"
   },
-  "completed_at": "2026-10-04T09:48:56.239668Z",
+  "completed_at": "2026-10-05T13:50:38.697779Z",
   "expected": 100,
   "emitted_envelopes": 100,
   "envelope_states": {
@@ -124,37 +124,37 @@
   "changes": 0,
   "budget": {
     "max_requests": 1900,
-    "requests_used": 1035,
-    "elapsed_seconds": 308.3,
+    "requests_used": 1071,
+    "elapsed_seconds": 336.8,
     "by_purpose": {
-      "website": 195,
+      "website": 229,
       "robots": 155,
-      "brreg_locations": 101,
       "brreg_financials": 100,
       "brreg_registry_live": 100,
       "brreg_roles": 100,
+      "brreg_locations": 100,
       "brreg_role_events": 100,
-      "nav_feed": 94,
-      "website_redirect": 83,
+      "nav_feed": 93,
+      "website_redirect": 87,
       "brreg_group": 6,
       "nav_token": 1
     },
     "top_hosts": {
-      "data.brreg.no": 507,
-      "pam-stilling-feed.nav.no": 95,
-      "www.systemhus.no": 9,
+      "data.brreg.no": 506,
+      "pam-stilling-feed.nav.no": 94,
+      "www.systemhus.no": 14,
+      "www.vetalis.fr": 11,
+      "www.usbl.no": 10,
+      "www.norwegianaerosolutions.no": 9,
       "www.oslofjorden.org": 8,
-      "www.vetalis.fr": 8,
+      "www.gobb.no": 8,
+      "plorea.com": 8,
+      "www.anleggsdeler.no": 8,
+      "alufence.com": 8,
       "heidi428.wix.com": 8,
-      "plorea.com": 7,
-      "vildeinga.com": 7,
-      "www.norwegianaerosolutions.no": 7,
-      "www.arendalgynekologi.no": 7,
-      "www.usbl.no": 6,
-      "gt-eiendom.no": 6,
-      "www.carmel.no": 6,
-      "alufence.com": 6,
-      "carmel.no": 6
+      "www.ajconsulting.com": 8,
+      "www.datanova.no": 7,
+      "gt-eiendom.no": 7
     }
   },
   "search": {
@@ -183,7 +183,7 @@
     "within_request_cap": true
   },
   "latency_ms": {
-    "p50": 8938,
-    "p95": 125408
+    "p50": 11044,
+    "p95": 127776
   }
 }
