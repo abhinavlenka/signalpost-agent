@@ -228,18 +228,20 @@ def feed_items(xml: bytes | str, feed_url: str, limit: int = 12) -> list[dict[st
         if kind == "item":
             link, raw_date, locator = child_text(node, "link"), child_text(node, "pubDate", "date"), "rss:item/pubDate"
             try:
-                date = parsedate_to_datetime(raw_date).date().isoformat() if raw_date and not DATE_PATTERN.match(raw_date) else _iso_date(raw_date)
+                parsed = parsedate_to_datetime(raw_date) if raw_date and not DATE_PATTERN.match(raw_date) else None
+                date, published = (parsed.date().isoformat(), parsed.isoformat()) if parsed else (_iso_date(raw_date), _published_at(raw_date))
             except (TypeError, ValueError):
-                date = None
+                date, published = None, None
         else:
             links = [child for child in node if local(child) == "link" and child.get("href")]
             link = next((child.get("href") for child in links if child.get("rel") in (None, "alternate")), links[0].get("href") if links else "")
-            date, locator = _iso_date(child_text(node, "published", "updated")), "atom:entry/published"
+            raw_date, locator = child_text(node, "published", "updated"), "atom:entry/published"
+            date, published = _iso_date(raw_date), _published_at(raw_date)
         date = _iso_date(date)  # also rejects dates in the future
         url = urllib.parse.urljoin(feed_url, link) if link else ""
         if not (title and date and url) or _registered_domain(url) != domain:
             continue
-        items.append({"date": date, "title": title[:200], "url": url.split("#", 1)[0], "locator": locator})
+        items.append({"date": date, "published_at": published, "title": title[:200], "url": url.split("#", 1)[0], "locator": locator})
     return sorted(items, key=lambda item: item["date"], reverse=True)[:limit]
 
 
@@ -423,6 +425,13 @@ def is_static_page(url: str) -> bool:
 
 
 DATE_PATTERN = re.compile(r"(20\d{2})-(\d{2})-(\d{2})")
+ISO_TIMESTAMP = re.compile(r"^20\d{2}-\d{2}-\d{2}[T ]\d{2}:\d{2}")
+
+
+def _published_at(value: Any) -> str | None:
+    """The source's own publication timestamp, exactly as written, when it states a time of day."""
+    text = str(value or "").strip()
+    return text if ISO_TIMESTAMP.match(text) and _iso_date(text) else None
 
 
 def _iso_date(value: Any) -> str | None:
@@ -451,13 +460,14 @@ def dated_items(html: str, page_url: str, soup: BeautifulSoup) -> list[dict[str,
             kinds = node.get("@type")
             kinds = set(kinds if isinstance(kinds, list) else [kinds])
             if kinds & {"NewsArticle", "BlogPosting", "Article", "PressRelease", "Report"}:
-                date = _iso_date(node.get("datePublished") or node.get("dateCreated"))
+                raw_date = node.get("datePublished") or node.get("dateCreated")
+                date = _iso_date(raw_date)
                 title = node.get("headline") or node.get("name")
                 url = node.get("url") or node.get("mainEntityOfPage") or page_url
                 if isinstance(url, dict):
                     url = url.get("@id") or page_url
                 if date and title and isinstance(title, str) and not is_static_page(str(url)):
-                    items[str(url) + date] = {"date": date, "title": title.strip()[:200], "url": str(url), "locator": "script[type='application/ld+json']"}
+                    items[str(url) + date] = {"date": date, "published_at": _published_at(raw_date), "title": title.strip()[:200], "url": str(url), "locator": "script[type='application/ld+json']"}
             for child in node.values():
                 walk(child)
         elif isinstance(node, list):
@@ -476,7 +486,7 @@ def dated_items(html: str, page_url: str, soup: BeautifulSoup) -> list[dict[str,
         if not title or len(title) < 8:
             continue
         url = urllib.parse.urljoin(page_url, link.get("href")) if link else page_url
-        items.setdefault(url + date, {"date": date, "title": title[:200], "url": url, "locator": "time[datetime]"})
+        items.setdefault(url + date, {"date": date, "published_at": _published_at(time_node.get("datetime")), "title": title[:200], "url": url, "locator": "time[datetime]"})
     unique: dict[tuple[str, str], dict[str, Any]] = {}
     for item in items.values():
         item["url"] = str(item["url"]).split("#", 1)[0]
@@ -547,22 +557,24 @@ def article_item(html: str, page_url: str, soup: BeautifulSoup) -> dict[str, Any
     marked = dated_items(html, page_url, BeautifulSoup("", "lxml"))  # JSON-LD only: no <time> scan of the whole page
     own = [item for item in marked if _same_page(item["url"], page_url)] or (marked if len(marked) == 1 else [])
     if own:  # a page that marks up several other articles is a listing, not an article
-        return {"date": own[0]["date"], "title": own[0]["title"], "url": page_url, "locator": own[0]["locator"]}
-    date, locator = None, None
+        return {"date": own[0]["date"], "published_at": own[0].get("published_at"), "title": own[0]["title"], "url": page_url, "locator": own[0]["locator"]}
+    date, raw_date, locator = None, None, None
     for selector, attribute in PUBLISHED_META:
         node = soup.select_one(selector)
-        date = _iso_date(node.get(attribute)) if node else None
+        raw_date = node.get(attribute) if node else None
+        date = _iso_date(raw_date)
         if date:
             locator = selector
             break
     if not date:
         container = soup.find("article") or soup.find("main")
         node = container.select_one("time[datetime]") if container else None
-        date = _iso_date(node.get("datetime")) if node else None
+        raw_date = node.get("datetime") if node else None
+        date = _iso_date(raw_date)
         locator = "article time[datetime]"
     if not date or len(fallback_title) < 8:
         return None
-    return {"date": date, "title": fallback_title[:200], "url": page_url, "locator": locator}
+    return {"date": date, "published_at": _published_at(raw_date), "title": fallback_title[:200], "url": page_url, "locator": locator}
 
 
 def _sitemap_articles(home_url: str, homepage_domain: str, *, timeout: float) -> tuple[list[str], int]:

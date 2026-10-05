@@ -520,13 +520,22 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
             social = [link for link in social if NORWAY_HANDLE.search(link["url"].rsplit("/", 1)[-1])]
         for link in social:
             declared_in = link.get("declared_in") or "a[href]"
-            builder.claim("company_profiles", "social_profile", link["url"], eid, identity=[link["platform"], link["url"]], locator=declared_in,
-                          span=f"{declared_in} on the verified company website: {link['url']}", extra={"platform": link["platform"]})
+            # Published under both names in use for this fact; the second is marked as an alias and reports no changes of its own.
+            for field, alias in (("company_profile", None), ("social_profile", "company_profile")):
+                builder.claim("company_profiles", field, link["url"], eid, identity=[link["platform"], link["url"]], locator=declared_in,
+                              span=f"{declared_in} on the verified company website: {link['url']}",
+                              extra={"platform": link["platform"], **({"alias_of": alias} if alias else {})})
         if not social:
             builder.state("company_profiles", "not_available", "verified website links no company-owned social profiles")
         group_site = scope in {"possibly_group_or_international", "page_on_third_party_site"}
+        page_hashes = {page.get("url"): page.get("content_sha256") for page in value.get("pages") or []}
         for page in [] if group_site else value.get("careers_pages") or []:
-            builder.claim("jobs", "hiring_signal", page, eid, identity=["careers_page", page], locator="a[href]",
+            # the careers page was fetched: cite it as its own source rather than the homepage that links it
+            careers_eid = eid if not page_hashes.get(page) else builder.add_evidence(
+                source_url=page, source_class=website.get("source_type") or "company_website", retrieved_at=website.get("retrieved_at"),
+                content_sha256=page_hashes[page], extraction_method="site_page_markup_v1",
+                span=f"careers page of the verified site {urllib.parse.urlparse(value.get('final_url') or '').hostname}")
+            builder.claim("jobs", "hiring_signal", page, careers_eid, identity=["careers_page", page], locator="a[href]",
                           span=f"careers page linked from the verified company website: {page}", extra={"signal": "careers_page"})
         for item in [] if group_site else value.get("news_items") or []:
             # cite the page or feed the item was read from, not the homepage
@@ -535,9 +544,11 @@ def build_web_presence(builder: EnvelopeBuilder, profile: dict[str, Any]) -> Non
                 source_url=found_in.get("url"), source_class=website.get("source_type") or "company_website", retrieved_at=found_in.get("retrieved_at") or website.get("retrieved_at"),
                 content_sha256=found_in.get("content_sha256"), extraction_method="site_feed_v1" if str(item.get("locator") or "").startswith(("rss:", "atom:")) else "site_page_markup_v1",
                 span=f"dated items on the verified site {urllib.parse.urlparse(value.get('final_url') or '').hostname}")
-            builder.claim("dated_activity", "dated_news", {"date": item.get("date"), "title": item.get("title"), "url": item.get("url")},
+            # A plain string, "Title (published time)": the full timestamp when the source states one, else the date.
+            builder.claim("dated_activity", "dated_news", f"{item.get('title')} ({item.get('published_at') or item.get('date')})",
                           news_eid, identity=["website_news", item.get("url")], effective_date=item.get("date"), locator=item.get("locator"),
-                          span=Quote(f"{item.get('title')} ({item.get('locator')}: {item.get('date')})", exact=True))
+                          span=Quote(f"{item.get('title')} ({item.get('locator')}: {item.get('date')})", exact=True),
+                          extra={"title": item.get("title"), "date": item.get("date"), "published_at": item.get("published_at"), "url": item.get("url")})
     elif state == "available":
         builder.state("official_website", "ambiguous", "candidate site failed exact-entity identity gate: " + "; ".join(assessment.get("reasons") or []),
                       candidate=value.get("final_url"))
@@ -627,7 +638,7 @@ def build_activity(builder: EnvelopeBuilder, profile: dict[str, Any]) -> None:
                           locator="$.ad_content", span=f"employer orgnr {job.get('employer_orgnr')}")
             # The same ad as a plain hiring signal: one URL per ad, next to the detailed open_job claim.
             builder.claim("jobs", "hiring_signal", job.get("public_url"), eid, identity=["job_ad", job.get("uuid")], effective_date=str(job.get("published") or "")[:10] or None,
-                          locator="$.ad_content", span=f"{job.get('title')} (employer orgnr {job.get('employer_orgnr')})", extra={"signal": "job_ad"})
+                          locator="$.ad_content", span=f"{job.get('title')} (employer orgnr {job.get('employer_orgnr')})", extra={"signal": "job_ad", "alias_of": "open_job"})
             builder.claim("dated_activity", "job_posted", {"date": str(job.get("published") or "")[:10], "title": job.get("title"), "url": job.get("public_url")},
                           eid, identity=["job_posted", job.get("uuid")], effective_date=str(job.get("published") or "")[:10] or None, locator="$.ad_content.published",
                           span=f"{job.get('title')} (published {str(job.get('published') or '')[:10]}; employer orgnr {job.get('employer_orgnr')})")

@@ -31,6 +31,8 @@
 
 Run-scoped values are confined to `run`, `operations` and `evidence[].retrieved_at`. Every other field depends only on the source content, so the same sources give the same record on every run, whether it is a first run or a refresh; see [`REFRESH.md`](REFRESH.md#determinism). What the run was compared against is in `run-report.json`, not in the envelope.
 
+External facts (`official_website`, `company_profile`, `social_profile`, `hiring_signal`, `dated_news`) always carry a plain string as their value; details sit in keys beside the value. A claim with `alias_of` repeats a fact published under another field name: it is the same fact, counted once in the summary and the explorer, and it reports no changes of its own on refresh.
+
 ## States
 
 Every field family has exactly one state:
@@ -125,6 +127,6 @@ The `website_scope` claim says how the published site is tied to the entity:
 | leadership | registered roles (CEO, chair, board, deputies, owners), auditor, accountant |
 | registered_workplaces | subunits with address, industry, registered employees |
 | official_website | verified website plus discovery method |
-| company_profiles | `social_profile`: one claim per profile linked from the verified site or declared in its Organization markup; the value is the profile URL and `platform` names the network |
-| jobs | `hiring_signal`: one claim per signal, the value is its URL and `signal` is `careers_page` or `job_ad`; `open_job`: the full NAV ad (exact orgnr) |
-| dated_activity | `dated_news`: `{date, title, url}` per news item on the verified site; `job_posted`; registered role changes; accounts filed |
+| company_profiles | `company_profile`: one claim per profile linked from the verified site or declared in its Organization markup; the value is the profile URL and `platform` names the network. The same fact is also published as `social_profile`, marked `alias_of: company_profile` |
+| jobs | `hiring_signal`: one claim per signal, the value is its URL and `signal` is `careers_page` (cited to the careers page itself) or `job_ad` (`alias_of: open_job`); `open_job`: the full NAV ad (exact orgnr) |
+| dated_activity | `dated_news`: one claim per news item on the verified site; the value is the string `Title (published time)`, with `title`, `date`, `published_at` and `url` as keys beside it; `job_posted`; registered role changes; accounts filed |

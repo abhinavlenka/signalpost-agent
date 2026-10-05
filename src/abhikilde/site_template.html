@@ -786,6 +786,7 @@ $("#cclear").onclick = () => { selected.clear(); updateBar(); $$(".cmp").forEach
 function fmtValue(c) {
   const v = c.value;
   if (c.field === "website_scope") return esc(SCOPE_LABEL[v] || human(v));
+  if (c.field === "dated_news") return `${esc(c.date || "")} — ${c.url ? link(c.url, c.title) : esc(c.title || v)}`;
   if (c.field === "share_capital" && typeof v === "number") return `NOK ${new Intl.NumberFormat("en-GB").format(v)}`;
   if (v && typeof v === "object" && !Array.isArray(v)) {
     if ("amount" in v) return `${esc(v.currency||"NOK")} ${money(v.amount)} <span class="sub">${esc(new Intl.NumberFormat("en-GB").format(v.amount))}</span>`;
@@ -842,7 +843,7 @@ async function renderCompany(org) {
   const inSel = selected.has(org), pinned = pins.has(org);
   const reason = family => { const st = states.find(([f]) => f === family); return st && st[1].reason ? `<p class="sub">${esc(st[1].reason)}</p>` : ""; };
   const ev = c => `<a class="sub" href="#/c/${esc(org)}/${esc(c.claim_id)}">Show evidence</a>`;
-  const scope = first("public_brand", "website_scope"), profiles = claims.filter(c => c.family === "company_profiles" && !c.stale);
+  const scope = first("public_brand", "website_scope"), profiles = claims.filter(c => c.family === "company_profiles" && !c.stale && !c.alias_of);
   const openJobs = claims.filter(c => c.field === "open_job" && !c.stale), careers = claims.find(c => c.field === "hiring_signal" && c.signal === "careers_page" && !c.stale);
   const news = claims.filter(c => c.field === "dated_news" && !c.stale).sort((a, b) => String(b.effective_date||"").localeCompare(String(a.effective_date||"")));
   const roleChange = claims.filter(c => c.field === "registered_role_change" && !c.stale).sort((a, b) => String(b.effective_date||"").localeCompare(String(a.effective_date||"")))[0];
@@ -851,7 +852,7 @@ async function renderCompany(org) {
     <div><h3>Website</h3>${web ? `<p>${link(web.value, host(web.value))}</p><p class="sub">${esc(SCOPE_LABEL[scope?.value] || "")}</p>${ev(web)}` : `<p>${badge(env.availability?.official_website || "not_available")}</p>${reason("official_website")}`}</div>
     <div><h3>Company profiles</h3>${profiles.length ? `<p>${profiles.map(c => link(c.value, (c.platform || c.field)[0].toUpperCase() + (c.platform || c.field).slice(1))).join(" · ")}</p>${ev(profiles[0])}` : `<p>${badge(env.availability?.company_profiles || "not_available")}</p>${reason("company_profiles")}`}</div>
     <div><h3>Hiring</h3>${openJobs.length ? `<p>${openJobs.length} open job${openJobs.length > 1 ? "s" : ""} in NAV</p><p class="sub">${esc(openJobs.slice(0, 2).map(c => c.value.title).join("; "))}</p>${ev(openJobs[0])}` : careers ? `<p>${link(careers.value, "Careers page")}</p>${ev(careers)}` : `<p>${badge(env.availability?.jobs || "not_available")}</p>${reason("jobs")}`}</div>
-    <div><h3>Latest dated activity</h3>${news.length ? `<p>${safeUrl(news[0].value.url) ? link(news[0].value.url, news[0].value.title) : esc(news[0].value.title)}</p><p class="sub">${esc(news[0].value.date)} · on the company site</p>${ev(news[0])}` : roleChange ? `<p>Roles updated in the register</p><p class="sub">${esc(roleChange.effective_date)}</p>${ev(roleChange)}` : `<p>${badge("not_available")}</p>`}</div>
+    <div><h3>Latest dated activity</h3>${news.length ? `<p>${safeUrl(news[0].url) ? link(news[0].url, news[0].title) : esc(news[0].title)}</p><p class="sub">${esc(news[0].date)} · on the company site</p>${ev(news[0])}` : roleChange ? `<p>Roles updated in the register</p><p class="sub">${esc(roleChange.effective_date)}</p>${ev(roleChange)}` : `<p>${badge("not_available")}</p>`}</div>
   </section>`;
   $("#app").innerHTML = `<article class="detail">
     <nav class="crumbs" aria-label="Breadcrumb"><a href="${listHash()}">← All companies</a></nav>
@@ -971,7 +972,7 @@ async function renderCompare(orgs) {
     ["People", [["Registered employees", env => { const c = pick(env, "legal_identity", "registered_employees")[0]; return {html: c ? src(env, c, esc(c.value)) : "—", n: c ? Number(c.value) : null}; }, true],
       ["CEO", role("DAGL")], ["Chair", role("LEDE")], ["Workplaces", env => ({html: pick(env, "registered_workplaces", "registered_workplace").length || "—"})]]],
     ["Presence and activity", [["Website", env => { const c = pick(env, "official_website", "official_website")[0]; return {html: c ? `${link(c.value, host(c.value))} <span class="sub">${src(env, c, "evidence")}</span>` : badge(env.availability?.official_website || "not_available")}; }],
-      ["Profiles", env => { const cs = (env.claims||[]).filter(c => c.family === "company_profiles" && !c.stale); return {html: cs.length ? cs.map(c => link(c.value, c.platform || c.field)).join(", ") : badge(env.availability?.company_profiles || "not_available")}; }],
+      ["Profiles", env => { const cs = (env.claims||[]).filter(c => c.family === "company_profiles" && !c.stale && !c.alias_of); return {html: cs.length ? cs.map(c => link(c.value, c.platform || c.field)).join(", ") : badge(env.availability?.company_profiles || "not_available")}; }],
       ["Open jobs", env => { const n = pick(env, "jobs", "open_job").length, cp = pick(env, "jobs", "hiring_signal").filter(c => c.signal === "careers_page")[0]; return {html: n || (cp ? link(cp.value, "careers page") : badge(env.availability?.jobs || "not_available"))}; }],
       ["Changes since last run", env => ({html: (env.changes||[]).length})]]],
   ];

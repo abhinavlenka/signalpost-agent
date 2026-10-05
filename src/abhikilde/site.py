@@ -47,7 +47,7 @@ def row(envelope: dict) -> dict:
         "w": by("official_website", "official_website"),
         "j": sum(1 for claim in claims if claim.get("field") == "open_job" and not claim.get("stale")),
         "l": [name for name in leaders if name],
-        "x": sum(1 for claim in live if claim.get("family") == "company_profiles"),
+        "x": sum(1 for claim in live if claim.get("family") == "company_profiles" and not claim.get("alias_of")),
         "sp": sorted({claim.get("platform") or claim["field"] for claim in live if claim.get("family") == "company_profiles"}),
         "y": sum(1 for claim in live if claim.get("field") == "dated_news"),
         "c": len(envelope.get("changes") or []),

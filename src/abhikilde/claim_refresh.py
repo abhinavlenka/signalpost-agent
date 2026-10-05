@@ -55,9 +55,10 @@ def _website_derived(claim: dict[str, Any]) -> bool:
     return claim.get("family") in DEBOUNCED_FAMILIES or claim.get("field") in DEBOUNCED_FIELDS or careers_page
 
 
-def _shadows_open_job(claim: dict[str, Any]) -> bool:
-    """A NAV ad is published twice: in detail (open_job) and as a plain hiring signal. Only the first reports changes."""
-    return claim.get("field") == "hiring_signal" and claim.get("signal") == "job_ad"
+def _is_alias(claim: dict[str, Any]) -> bool:
+    """Some facts are published twice: a NAV ad in detail (open_job) and as a plain hiring signal, a profile as
+    company_profile and social_profile. The second copy names the first in ``alias_of`` and reports no changes."""
+    return bool(claim.get("alias_of"))
 
 
 def _change_id(*parts: Any) -> str:
@@ -101,7 +102,7 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
     for key, claim in curr_claims.items():
         before = prev_claims.get(key)
         if before is None:
-            if _shadows_open_job(claim):
+            if _is_alias(claim):
                 continue
             website_derived = _website_derived(claim)
             if previous_availability.get(claim["family"]) in {None, "failed", "blocked"} or website_derived:
@@ -147,7 +148,7 @@ def apply_refresh(previous: dict[str, Any] | None, current: dict[str, Any]) -> d
         family_state = availability.get(family)
         source_checked = family_state in {"available", "not_available"}
         debounced = _website_derived(before)
-        if source_checked and _shadows_open_job(before):
+        if source_checked and not debounced and _is_alias(before):
             continue
         first_miss = debounced and not before.get("stale")
         if family in NON_REMOVABLE or not source_checked or family not in REMOVED or first_miss:

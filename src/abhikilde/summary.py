@@ -197,7 +197,7 @@ def build_summary(envelope: dict[str, Any]) -> dict[str, Any]:
             say("presence", f"It has a page on a third-party site: {website['value']}.", website, scope)
         else:
             say("presence", f"Its verified website is {website['value']}.", website)
-    profiles = [claim for (family, _), items in by_field.items() if family == "company_profiles" for claim in items]
+    profiles = [claim for (family, _), items in by_field.items() if family == "company_profiles" for claim in items if not claim.get("alias_of")]
     if profiles:
         say("presence", "Company-owned profiles linked from that site: " + ", ".join(sorted({claim.get("platform") or claim["field"] for claim in profiles})) + ".", *profiles)
     jobs = by_field.get(("jobs", "open_job"), [])
@@ -209,8 +209,7 @@ def build_summary(envelope: dict[str, Any]) -> dict[str, Any]:
         say("presence", f"Its site has a careers page: {careers['value']}.", careers)
     news = sorted(by_field.get(("dated_activity", "dated_news"), []), key=lambda claim: str(claim.get("effective_date") or ""))
     if news:
-        latest_news = news[-1]["value"] or {}
-        say("presence", f"The latest dated item on its site is “{str(latest_news.get('title'))[:120]}” ({latest_news.get('date')}).", news[-1])
+        say("presence", f"The latest dated item on its site is “{str(news[-1].get('title'))[:120]}” ({news[-1].get('date')}).", news[-1])
 
     changes = envelope.get("changes") or []
     material = [change for change in changes if change.get("material")]

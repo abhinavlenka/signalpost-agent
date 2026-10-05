@@ -244,7 +244,7 @@ def test_group_site_profiles_require_norway_handle():
         "social_links": [{"platform": "linkedin", "url": "https://linkedin.com/company/bestseller"},
                          {"platform": "linkedin", "url": "https://linkedin.com/company/bestseller-norge"}]})
     envelope = build_envelope(p, run=RUN)
-    profiles = [c["value"] for c in envelope["claims"] if c["family"] == "company_profiles"]
+    profiles = [c["value"] for c in envelope["claims"] if c["field"] == "company_profile"]
     assert profiles == ["https://linkedin.com/company/bestseller-norge"]
     scope = [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"]
     assert scope == ["possibly_group_or_international"]
@@ -387,7 +387,7 @@ def test_member_page_on_a_chain_site_publishes_only_the_labelled_url(url):
 ])
 def test_own_or_number_verified_sites_keep_their_content(final_url, markers):
     envelope = build_envelope(chain_profile(final_url, markers), run=RUN)
-    assert web_fields(envelope) == ["dated_news", "hiring_signal", "official_website", "self_description", "social_profile", "website_brand_title", "website_scope"]
+    assert web_fields(envelope) == ["company_profile", "dated_news", "hiring_signal", "official_website", "self_description", "social_profile", "website_brand_title", "website_scope"]
 
 
 def test_site_index_row_carries_leaders_and_presence_counts_for_search_and_filters(tmp_path):
@@ -472,8 +472,8 @@ def international_profile(legal_form="AS", home=(), contact=(), name="KITRON AS"
 def test_international_domain_is_only_a_group_site_without_norwegian_proof(legal_form, home, contact, scope, profiles):
     envelope = build_envelope(international_profile(legal_form, home, contact), run=RUN)
     assert [c["value"] for c in envelope["claims"] if c["field"] == "website_scope"] == [scope]
-    assert sorted(c["platform"] for c in envelope["claims"] if c["family"] == "company_profiles") == profiles
-    assert {c["field"] for c in envelope["claims"] if c["family"] == "company_profiles"} <= {"social_profile"}
+    assert sorted(c["platform"] for c in envelope["claims"] if c["field"] == "company_profile") == profiles
+    assert sorted(c["platform"] for c in envelope["claims"] if c["field"] == "social_profile") == profiles
 
 
 def test_norwegian_domain_scope_does_not_depend_on_which_pages_were_reachable():
@@ -529,9 +529,9 @@ def test_feed_items_are_dated_news_with_exact_dates():
     atom = """<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Aas</title>
       <entry><title>Vi flytter til nye lokaler</title><link rel="alternate" href="https://aas.no/aktuelt/flytter/"/><published>2026-06-01T10:00:00Z</published></entry></feed>"""
     assert feed_items(rss, "https://aas.no/feed/") == [
-        {"date": "2026-09-15", "title": "Ny rammeavtale med Bane NOR", "url": "https://aas.no/nyheter/ny-rammeavtale/", "locator": "rss:item/pubDate"}]
+        {"date": "2026-09-15", "published_at": "2026-09-15T08:30:00+00:00", "title": "Ny rammeavtale med Bane NOR", "url": "https://aas.no/nyheter/ny-rammeavtale/", "locator": "rss:item/pubDate"}]
     assert feed_items(atom, "https://aas.no/feed.atom") == [
-        {"date": "2026-06-01", "title": "Vi flytter til nye lokaler", "url": "https://aas.no/aktuelt/flytter/", "locator": "atom:entry/published"}]
+        {"date": "2026-06-01", "published_at": "2026-06-01T10:00:00Z", "title": "Vi flytter til nye lokaler", "url": "https://aas.no/aktuelt/flytter/", "locator": "atom:entry/published"}]
     assert feed_items("<html>not a feed</html>", "https://aas.no/feed/") == []
 
 
@@ -854,7 +854,7 @@ def news_profile():
 def test_news_cites_the_feed_or_page_it_was_read_from():
     envelope = build_envelope(news_profile(), run=RUN)
     records = {item["id"]: item for item in envelope["evidence"]}
-    cited = {c["value"]["title"]: records[c["evidence_ids"][0]] for c in envelope["claims"] if c["field"] == "dated_news"}
+    cited = {c["title"]: records[c["evidence_ids"][0]] for c in envelope["claims"] if c["field"] == "dated_news"}
     assert (cited["Ny avtale signert"]["source_url"], cited["Ny avtale signert"]["content_sha256"]) == ("https://aas.no/feed/", "9" * 64)
     assert (cited["Sommerstengt"]["source_url"], cited["Sommerstengt"]["content_sha256"]) == ("https://aas.no/nyheter/", "8" * 64)
 
@@ -1379,19 +1379,72 @@ def _external_profile():
 
 
 def test_social_hiring_and_news_use_the_scored_family_names():
-    envelope = build_envelope(_external_profile(), run=RUN)
+    p = _external_profile()
+    p["evidence"]["website"]["value"]["pages"] = [{"url": "https://www.aaselektronikk.no/", "content_sha256": "f" * 64},
+                                                 {"url": "https://www.aaselektronikk.no/jobb", "content_sha256": "c" * 64}]
+    p["evidence"]["website"]["value"]["news_items"][0]["published_at"] = "2026-09-01T08:30:00+02:00"
+    envelope = build_envelope(p, run=RUN)
+    records = {item["id"]: item for item in envelope["evidence"]}
     by_field = {}
     for claim in envelope["claims"]:
         by_field.setdefault(claim["field"], []).append(claim)
-    assert sorted((c["platform"], c["value"]) for c in by_field["social_profile"]) == [
-        ("facebook", "https://facebook.com/aaselektronikk"), ("linkedin", "https://linkedin.com/company/aas-elektronikk")]
+    # every external fact is a plain string, like official_website; details sit next to it
+    for field in ("official_website", "company_profile", "social_profile", "hiring_signal", "dated_news"):
+        assert by_field[field] and all(isinstance(claim["value"], str) for claim in by_field[field]), field
+    profiles = [("facebook", "https://facebook.com/aaselektronikk"), ("linkedin", "https://linkedin.com/company/aas-elektronikk")]
+    assert sorted((c["platform"], c["value"]) for c in by_field["company_profile"]) == profiles
+    assert sorted((c["platform"], c["value"]) for c in by_field["social_profile"]) == profiles
+    assert all(c["alias_of"] == "company_profile" for c in by_field["social_profile"]) and not any("alias_of" in c for c in by_field["company_profile"])
     assert sorted((c["signal"], c["value"]) for c in by_field["hiring_signal"]) == [
         ("careers_page", "https://www.aaselektronikk.no/jobb"), ("job_ad", "https://arbeidsplassen.nav.no/stillinger/stilling/u1")]
-    assert [c["value"] for c in by_field["dated_news"]] == [{"date": "2026-09-01", "title": "Ny butikk", "url": "https://www.aaselektronikk.no/nyheter/ny-butikk"}]
+    careers = next(c for c in by_field["hiring_signal"] if c["signal"] == "careers_page")
+    assert records[careers["evidence_ids"][0]]["source_url"] == "https://www.aaselektronikk.no/jobb"  # the careers page is its own source
+    assert records[careers["evidence_ids"][0]]["content_sha256"] == "c" * 64
+    news = by_field["dated_news"][0]
+    assert news["value"] == "Ny butikk (2026-09-01T08:30:00+02:00)"
+    assert (news["title"], news["date"], news["published_at"], news["url"]) == ("Ny butikk", "2026-09-01", "2026-09-01T08:30:00+02:00", "https://www.aaselektronikk.no/nyheter/ny-butikk")
     assert len(by_field["open_job"]) == 1  # the detailed ad is still published
     assert not {"facebook", "linkedin", "careers_page", "website_news"} & set(by_field)
     summary = build_summary(apply_refresh(None, envelope))["text"]
-    assert "facebook, linkedin" in summary and "hiring" in summary and "Ny butikk" in summary
+    assert "facebook, linkedin" in summary and "hiring" in summary and "Ny butikk” (2026-09-01)" in summary
+
+
+def test_news_without_a_time_of_day_uses_the_date():
+    envelope = build_envelope(_external_profile(), run=RUN)
+    news = next(c for c in envelope["claims"] if c["field"] == "dated_news")
+    assert news["value"] == "Ny butikk (2026-09-01)" and news["published_at"] is None
+
+
+def test_an_alias_reports_no_change_of_its_own():
+    without = _external_profile()
+    without["evidence"]["website"]["value"]["social_links"] = [{"platform": "facebook", "url": "https://facebook.com/aaselektronikk"}]
+    first = apply_refresh(None, build_envelope(without, run=RUN))
+    second = apply_refresh(copy.deepcopy(first), build_envelope(without, run=RUN2))
+    gained = apply_refresh(copy.deepcopy(second), build_envelope(_external_profile(), run=RUN2))
+    assert [c["claim_key"].split("|")[2] for c in gained["claims"] if c.get("backfilled")] == ["company_profile"]
+    assert sum(c["field"] == "social_profile" for c in gained["claims"]) == 2
+
+
+@pytest.mark.parametrize("markup, expected", [
+    ('<script type="application/ld+json">{"@type":"NewsArticle","headline":"Bedre sosial funksjon etter hjerneskade","datePublished":"2025-09-22T20:00:00+02:00"}</script>', "2025-09-22T20:00:00+02:00"),
+    ('<meta property="article:published_time" content="2026-03-04T08:00:00Z"><meta property="og:title" content="Ny kontrakt signert i Bergen">', "2026-03-04T08:00:00Z"),
+    ('<article><h1>Vi åpner ny avdeling</h1><time datetime="2026-02-01">1. februar</time></article>', None),
+])
+def test_an_article_keeps_the_published_timestamp_its_markup_states(markup, expected):
+    from bs4 import BeautifulSoup
+    from abhikilde.website import article_item
+
+    html = f"<html><body>{markup}</body></html>"
+    assert article_item(html, "https://www.aas.no/nyheter/en-sak-om-noe/", BeautifulSoup(html, "lxml"))["published_at"] == expected
+
+
+def test_feed_items_carry_an_iso_timestamp():
+    from abhikilde.website import feed_items
+
+    rss = """<rss><channel><item><title>Ny avtale signert</title><link>https://aas.no/nyheter/ny-avtale</link><pubDate>Mon, 22 Sep 2025 20:00:00 +0200</pubDate></item></channel></rss>"""
+    atom = """<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Ny avtale signert</title><link href="https://aas.no/nyheter/ny-avtale"/><published>2025-09-22T18:00:00Z</published></entry></feed>"""
+    assert [(i["date"], i["published_at"]) for i in feed_items(rss, "https://aas.no/feed/")] == [("2025-09-22", "2025-09-22T20:00:00+02:00")]
+    assert [(i["date"], i["published_at"]) for i in feed_items(atom, "https://aas.no/feed/")] == [("2025-09-22", "2025-09-22T18:00:00Z")]
 
 
 def test_a_job_ad_reports_one_change_not_two():
